@@ -32,12 +32,41 @@ type Directions = {
   section: string;
 };
 
+/**
+ * What the render actually depicts — NyQuil SEVERE at aisle 7, rack 3, shelf 4,
+ * with "NyQuil Severe · 12 oz" and "AISLE 7" burned into the frame.
+ *
+ * The correction card below exists because those are pixels, not data: reached
+ * for any other product the animation would walk a shopper to NyQuil's aisle.
+ * For NyQuil itself, at the location the render draws, there is nothing to
+ * correct — the card would only cover the video's own aisle header, so it is
+ * withheld. Matching on the location as well as the product is what keeps that
+ * honest: move the SKU in inventory and the card comes back on its own.
+ */
+const RENDERED_ROUTE = {
+  slug: "nyquil-severe",
+  aisle: "Aisle 7",
+  rack: "Rack 3",
+  shelf: "Shelf 4",
+} as const;
+
+function animationDepicts(slug: string | undefined, directions: Directions) {
+  return (
+    slug === RENDERED_ROUTE.slug &&
+    directions.aisle === RENDERED_ROUTE.aisle &&
+    directions.rack === RENDERED_ROUTE.rack &&
+    directions.shelf === RENDERED_ROUTE.shelf
+  );
+}
+
 export function WayfindingScreen({
   onBack,
+  productSlug,
   productName,
   directions,
 }: {
   onBack: () => void;
+  productSlug?: string;
   productName?: string;
   directions?: Directions;
 }) {
@@ -94,7 +123,7 @@ export function WayfindingScreen({
         )}
       />
 
-      {productName && directions ? (
+      {productName && directions && !animationDepicts(productSlug, directions) ? (
         <div className="absolute top-[4cqw] right-[4cqw] left-[4cqw] rounded-2xl bg-black/70 px-[3cqw] py-[2.4cqw] text-white backdrop-blur-sm">
           <p className="text-[1.7cqw] font-semibold tracking-[0.14em] text-white/75 uppercase">
             Demo inventory location · animation route may not match this product
