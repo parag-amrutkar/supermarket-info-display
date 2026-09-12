@@ -60,6 +60,7 @@
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
   --animate-shake: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  --animate-transcript-flash: transcript-flash 2.5s ease-out both;
   --animate-attract-field: attract-field 28s ease-in-out infinite;
   --animate-attract-drift-a: attract-drift-a 37s ease-in-out infinite alternate;
   --animate-attract-drift-b: attract-drift-b 43s ease-in-out infinite alternate;
@@ -73,6 +74,22 @@
   --animate-attract-enter: attract-enter 1.6s cubic-bezier(0.16, 1, 0.3, 1) var(--attract-delay, 0s) both;
   --animate-attract-sweep: attract-sweep 28s linear infinite;
   --animate-attract-shift: attract-shift 247s ease-in-out infinite alternate;
+}
+
+/* The spoken question, flashed over the whole home screen.
+
+   Hold-then-fade is one animation rather than a React timer plus a class
+   toggle: React will not restart a CSS animation just because the same class
+   is re-added, and the overlay mounts and unmounts on every capture. Keeping
+   the timing here means the component only has to clear the transcript when
+   the 2.5s is up. Opacity only, so there is nothing to gate behind
+   `motion-safe` — and the percentages are load-bearing: 80% of 2.5s is the
+   two-second hold the design calls for. */
+@keyframes transcript-flash {
+  0%   { opacity: 0; }
+  6%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Wrong-PIN feedback on the kiosk keypad. tw-animate-css ships no shake. */

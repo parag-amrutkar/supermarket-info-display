@@ -12,6 +12,10 @@ import { BeaconMark } from "@/components/kiosk/beacon-mark";
  * anchored — this is a customer-facing display, and staff sign-in is the
  * exception, not the call to action.
  *
+ * No microphone here on purpose. Asking a question belongs to the store's own
+ * home screen, past sign-in (`push-to-talk.tsx`); this screen is the attract
+ * loop and the way in, nothing else.
+ *
  * It runs a continuous 28s attract loop with a full -> ambient intensity arc:
  * the mark draws itself in, the wordmark and its one line of copy resolve on a
  * short cascade, then everything decays to a slow drift before the cycle

@@ -1,14 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, LogOut, Navigation, Tag } from "lucide-react";
-import { cn } from "cn";
+import { LogOut } from "lucide-react";
 
-import { BeaconMark } from "@/components/kiosk/beacon-mark";
-import { ShoppingChat } from "@/components/kiosk/shopping-chat";
+import { PushToTalk } from "@/components/kiosk/push-to-talk";
 import { AwningStripe, TenantWordmark } from "@/components/kiosk/tenant-wordmark";
-import type { DemoSession } from "@/lib/demo-auth";
 import type { Tenant } from "@/lib/tenants";
+
+/**
+ * The store's own home screen — tenant chrome at the top, push to talk at the
+ * bottom, and deliberately nothing in between.
+ *
+ * The empty middle is the design, not an unfinished state: a shopper walking up
+ * has exactly one thing to do, and the answer takes over the panel the moment
+ * they have spoken (see `push-to-talk.tsx`). Content slots, promotions and the
+ * product shortcut all lived here and were competing with the microphone.
+ *
+ * `relative`, because the transcript flash positions against this element.
+ */
 
 /**
  * Current minute, or null on the server.
@@ -42,86 +51,41 @@ function Clock() {
   );
 }
 
-/** A content region. Unfilled slots are explicitly labelled as empty rather
- *  than faked with stock imagery, so the demo does not imply content that does
- *  not exist. Pass `onPress` and the slot becomes a real tap target — rendered
- *  as a button rather than a div, so it is reachable and announced as one. */
-function ContentSlot({
-  icon: Icon,
-  label,
-  hint,
-  className,
-  onPress,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  hint: string;
-  className?: string;
-  onPress?: () => void;
-}) {
-  const body = (
-    <>
-      <Icon className="size-[6cqw] text-brand" />
-      <span className="text-[2.4cqw] font-medium">{label}</span>
-      <span className="text-[1.9cqw] text-muted-foreground">{hint}</span>
-    </>
-  );
-  const shell = cn(
-    "flex flex-col items-center justify-center gap-[1.5cqw] rounded-2xl p-[3cqw] text-center",
-    // `ring-dashed` does not exist — rings are box-shadows and cannot dash.
-    "border-2 border-dashed border-foreground/20 bg-card/60",
-    className,
-  );
-
-  if (!onPress) return <div className={shell}>{body}</div>;
-
-  return (
-    <button
-      type="button"
-      onClick={onPress}
-      className={cn(
-        shell,
-        "border-solid border-brand/40 transition-colors outline-none",
-        "hover:bg-card focus-visible:ring-4 focus-visible:ring-brand/60",
-      )}
-    >
-      {body}
-    </button>
-  );
-}
-
 export function TenantDisplay({
   tenant,
-  session,
   onSignOut,
-  onOpenWayfinding,
 }: {
   tenant: Tenant;
-  session: DemoSession;
   onSignOut: () => void;
-  onOpenWayfinding: () => void;
 }) {
-  const signedInAt = new Date(session.signedInAt).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
   return (
-    <div className="@container flex h-full w-full flex-col">
+    <div className="@container relative flex h-full w-full flex-col overflow-hidden">
       {/* Tenant chrome. This is the moment the kiosk stops being Beacon Box
           branded and becomes the store's own screen. */}
-      <header className="flex shrink-0 items-center gap-[3cqw] bg-brand px-[5cqw] py-[3.5cqw] text-brand-foreground">
+      <header className="group flex shrink-0 items-center gap-[3cqw] bg-brand px-[5cqw] py-[3.5cqw] text-brand-foreground">
         <TenantWordmark tenant={tenant} className="text-[3.4cqw]" />
         <span className="flex-1" />
-        <span className="text-right text-[1.9cqw] leading-tight opacity-85">
+        {/* The sign-out button below is hidden at rest but still holds its
+            8cqw of layout, which left a dead gap at the panel's right edge.
+            So this slides across it (8cqw button + 3cqw header gap = 11cqw)
+            and slides back out of the way when the button reveals, which also
+            makes the reveal read as deliberate rather than as a control
+            appearing out of nowhere. */}
+        <span className="translate-x-[11cqw] text-right text-[1.9cqw] leading-tight opacity-85 transition-transform duration-300 ease-out group-focus-within:translate-x-0 group-hover:translate-x-0 motion-reduce:transition-none">
           <span className="block font-semibold">{tenant.storeNumber}</span>
           <Clock />
         </span>
+        {/* Staff control on a customer-facing screen, so it is invisible until
+            the nav is hovered. `pointer-events-none` while hidden is the part
+            that matters on the panel: without it a stray tap in the corner
+            signs the machine out with nothing on screen to explain why. Touch
+            browsers apply sticky :hover, so on the hardware this is two taps —
+            one to reveal, one to sign out. Keyboard reaches it via focus. */}
         <button
           type="button"
           onClick={onSignOut}
           aria-label="Sign out of this machine"
-          className="grid size-[8cqw] shrink-0 place-items-center rounded-xl bg-brand-foreground/15 transition-colors outline-none hover:bg-brand-foreground/25 focus-visible:ring-4 focus-visible:ring-brand-foreground/60"
+          className="pointer-events-none grid size-[8cqw] shrink-0 place-items-center rounded-xl bg-brand-foreground/15 opacity-0 transition outline-none group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-brand-foreground/25 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:ring-4 focus-visible:ring-brand-foreground/60"
         >
           <LogOut className="size-[4cqw]" />
         </button>
@@ -129,48 +93,9 @@ export function TenantDisplay({
 
       {tenant.brand.accent ? <AwningStripe className="h-[2cqw] shrink-0" /> : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-[3cqw] overflow-y-auto p-[5cqw]">
-        <div className="flex items-baseline justify-between gap-[2cqw]">
-          <h1 className="text-[3.6cqw] leading-tight font-semibold">
-            Signed in · {tenant.name}
-          </h1>
-          <span className="shrink-0 text-[1.9cqw] text-muted-foreground">
-            since {signedInAt}
-          </span>
-        </div>
-        <p className="text-[2.1cqw] text-muted-foreground">
-          {tenant.address} — this screen is now managed by this account.
-        </p>
+      <div className="min-h-0 flex-1" />
 
-        <ShoppingChat key={`${tenant.id}:${session.signedInAt}`} tenant={tenant} session={session} />
-
-        <ContentSlot
-          icon={Navigation}
-          label="Find a product"
-          hint="Route to NyQuil Severe — Aisle 7"
-          className="min-h-0 flex-1"
-          onPress={onOpenWayfinding}
-        />
-        <div className="grid shrink-0 grid-cols-2 gap-[3cqw]">
-          <ContentSlot
-            icon={Tag}
-            label="Promotions"
-            hint="Empty"
-            className="aspect-[4/3]"
-          />
-          <ContentSlot
-            icon={CalendarDays}
-            label="Store hours"
-            hint="Empty"
-            className="aspect-[4/3]"
-          />
-        </div>
-      </div>
-
-      <footer className="flex shrink-0 items-center justify-center gap-[1.5cqw] border-t border-foreground/15 py-[2.5cqw] text-[1.7cqw] text-muted-foreground">
-        <BeaconMark className="size-[3cqw]" />
-        Powered by Beacon Box · Device BB-0471
-      </footer>
+      <PushToTalk />
     </div>
   );
 }

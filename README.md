@@ -2,12 +2,14 @@
 
 ## Voice transcription
 
-The kiosk welcome and signed-in store screens support tap-to-speak questions
-with a typed fallback through `components/kiosk/voice-input.tsx`. The panel
-uses the store's brand colors and the shared `useVoiceInput` controller; moving
-between screens unmounts it and cancels any pending recording or upload. Set the
-server-only `OPENROUTER_API_KEY` in `.env.local`; the key is never sent to the
-browser. `TRANSCRIPTION_MODEL` is optional and defaults to `openai/gpt-transcribe`.
+The signed-in store screen is a tap-to-speak question and nothing else:
+`components/kiosk/push-to-talk.tsx` renders a bottom-anchored microphone in the
+store's brand color, and flashes the transcribed question over the whole panel
+for two seconds before fading out. The attract screen carries no microphone —
+asking happens past sign-in. Moving between screens unmounts the control and
+cancels any pending recording or upload. Set the server-only `OPENROUTER_API_KEY`
+in `.env.local`; the key is never sent to the browser. `TRANSCRIPTION_MODEL` is
+optional and defaults to `openai/gpt-transcribe`.
 
 Microphone recording requires HTTPS or `localhost` and browser permission. Each
 recording stops automatically after 20 seconds. The reusable controller in
