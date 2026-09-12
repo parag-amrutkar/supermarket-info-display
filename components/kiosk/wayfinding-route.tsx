@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 
 import { WayfindingScreen } from "@/components/kiosk/wayfinding-screen";
 
+type Directions = {
+  aisle: string;
+  rack: string;
+  shelf: string;
+  section: string;
+};
+
 /**
  * Adapts `WayfindingScreen` to a URL-reachable route.
  *
@@ -13,8 +20,16 @@ import { WayfindingScreen } from "@/components/kiosk/wayfinding-screen";
  * `router.back()`, which would land on whatever preceded it if the shopper
  * arrived from somewhere else.
  */
-export function WayfindingRoute({ backHref }: { backHref: string }) {
+export function WayfindingRoute({
+  backHref,
+  productName,
+  directions,
+}: {
+  backHref: string;
+  productName: string;
+  directions: Directions;
+}) {
   const router = useRouter();
 
-  return <WayfindingScreen onBack={() => router.push(backHref)} />;
+  return <WayfindingScreen onBack={() => router.push(backHref)} productName={productName} directions={directions} />;
 }

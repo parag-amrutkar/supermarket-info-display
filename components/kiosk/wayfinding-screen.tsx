@@ -25,7 +25,22 @@ import { cn } from "cn";
 const INTRO_SRC = "/cvs-wayfinding-intro.mp4";
 const LOOP_SRC = "/cvs-wayfinding-loop.mp4";
 
-export function WayfindingScreen({ onBack }: { onBack: () => void }) {
+type Directions = {
+  aisle: string;
+  rack: string;
+  shelf: string;
+  section: string;
+};
+
+export function WayfindingScreen({
+  onBack,
+  productName,
+  directions,
+}: {
+  onBack: () => void;
+  productName?: string;
+  directions?: Directions;
+}) {
   const [looping, setLooping] = React.useState(false);
   const introRef = React.useRef<HTMLVideoElement>(null);
   const loopRef = React.useRef<HTMLVideoElement>(null);
@@ -78,6 +93,18 @@ export function WayfindingScreen({ onBack }: { onBack: () => void }) {
           looping && "invisible",
         )}
       />
+
+      {productName && directions ? (
+        <div className="absolute top-[4cqw] right-[4cqw] left-[4cqw] rounded-2xl bg-black/70 px-[3cqw] py-[2.4cqw] text-white backdrop-blur-sm">
+          <p className="text-[1.7cqw] font-semibold tracking-[0.14em] text-white/75 uppercase">
+            Demo inventory location · animation route may not match this product
+          </p>
+          <p className="mt-[0.6cqw] text-[2.5cqw] leading-tight font-semibold">
+            {productName}: {directions.aisle} · {directions.rack} · {directions.shelf}
+          </p>
+          <p className="mt-[0.5cqw] text-[1.9cqw] text-white/80">{directions.section}</p>
+        </div>
+      ) : null}
 
       <button
         type="button"
