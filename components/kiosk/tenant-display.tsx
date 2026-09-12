@@ -5,7 +5,7 @@ import { CalendarDays, LogOut, Navigation, Tag } from "lucide-react";
 import { cn } from "cn";
 
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
-import { KioskVoiceInput } from "@/components/kiosk/voice-input";
+import { ShoppingChat } from "@/components/kiosk/shopping-chat";
 import { AwningStripe, TenantWordmark } from "@/components/kiosk/tenant-wordmark";
 import type { DemoSession } from "@/lib/demo-auth";
 import type { Tenant } from "@/lib/tenants";
@@ -142,7 +142,7 @@ export function TenantDisplay({
           {tenant.address} — this screen is now managed by this account.
         </p>
 
-        <KioskVoiceInput />
+        <ShoppingChat key={`${tenant.id}:${session.signedInAt}`} tenant={tenant} session={session} />
 
         <ContentSlot
           icon={Navigation}

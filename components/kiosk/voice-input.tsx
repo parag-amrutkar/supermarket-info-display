@@ -1,12 +1,21 @@
 "use client";
 
 import { useId } from "react";
-import { LoaderCircle, Mic, Square, X } from "lucide-react";
+import { LoaderCircle, Mic, Send, Square, X } from "lucide-react";
 import { cn } from "cn";
 import { useVoiceInput } from "@/hooks/use-voice-input";
+import { MAX_CHAT_TEXT_LENGTH } from "@/lib/shopping-agent";
 
 /** Activation stays in the controller so a sensor can use the same actions. */
-export function KioskVoiceInput({ compact = false }: { compact?: boolean }) {
+export function KioskVoiceInput({
+  compact = false,
+  disabled = false,
+  onSubmit,
+}: {
+  compact?: boolean;
+  disabled?: boolean;
+  onSubmit?: (question: string) => void;
+}) {
   const voice = useVoiceInput();
   const id = useId();
   const recording = voice.status === "recording";
@@ -48,7 +57,7 @@ export function KioskVoiceInput({ compact = false }: { compact?: boolean }) {
       <div className="flex gap-[2cqw]">
         <button
           type="button"
-          disabled={waiting}
+          disabled={waiting || disabled}
           onClick={recording ? voice.stopListening : voice.startListening}
           className={`${control} flex flex-1 items-center justify-center gap-[2cqw] bg-brand text-brand-foreground hover:opacity-90`}
         >
@@ -91,7 +100,8 @@ export function KioskVoiceInput({ compact = false }: { compact?: boolean }) {
       <textarea
         id={id}
         value={voice.transcript}
-        disabled={active}
+        maxLength={MAX_CHAT_TEXT_LENGTH}
+        disabled={active || disabled}
         onChange={(event) => voice.setTranscript(event.target.value)}
         placeholder="Where can I find…?"
         rows={compact ? 1 : 2}
@@ -108,8 +118,14 @@ export function KioskVoiceInput({ compact = false }: { compact?: boolean }) {
             </button>
           )}
           <button type="button" onClick={voice.reset} className={`${control} border border-foreground/20`}>
-            Start over
+            Clear question
           </button>
+          {onSubmit && voice.transcript.trim() && (
+            <button type="button" disabled={disabled} onClick={() => onSubmit(voice.transcript)} className={`${control} flex items-center gap-[1cqw] bg-brand text-brand-foreground hover:opacity-90`}>
+              <Send aria-hidden className="size-[3cqw]" />
+              Ask Beacon Box
+            </button>
+          )}
         </div>
       )}
     </section>

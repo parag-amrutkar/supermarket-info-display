@@ -46,6 +46,7 @@ export const getProductBySku = cache(async function getProductBySku(
 export async function getAisleInventory(
   aisle: number,
   storeId = DEFAULT_STORE_ID,
+  limit = 20,
 ): Promise<PublicInventoryRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -56,7 +57,8 @@ export async function getAisleInventory(
     .order("section")
     .order("rack")
     .order("shelf_level")
-    .order("position");
+    .order("position")
+    .limit(Math.min(Math.max(limit, 1), 20));
 
   if (error) throw new Error(`Aisle lookup failed: ${error.message}`);
   return data ?? [];

@@ -5,6 +5,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { claudeCode } from "ai-sdk-provider-claude-code";
 import { createProviderRegistry } from "ai";
+import type { ProviderV4 } from "@ai-sdk/provider";
 
 /**
  * Any OpenAI-compatible endpoint: Ollama, LM Studio, vLLM, Groq, Together,
@@ -18,13 +19,26 @@ const compatible = createOpenAICompatible({
 });
 
 /**
+ * `@openrouter/ai-sdk-provider` 3.x returns v4 models but its provider
+ * function lacks the provider-level version marker. The AI SDK registry would
+ * otherwise adapt it as an older provider and corrupt tool-call finish reasons,
+ * preventing server-side tool execution. Keep the native v4 models intact.
+ */
+const openrouterV4: ProviderV4 = {
+  specificationVersion: "v4",
+  languageModel: openrouter.languageModel.bind(openrouter),
+  embeddingModel: openrouter.textEmbeddingModel.bind(openrouter),
+  imageModel: openrouter.imageModel.bind(openrouter),
+};
+
+/**
  * Every provider the app can talk to. Add one here and it is immediately
  * addressable as `<provider>:<model>` — nothing downstream needs to change.
  */
 export const registry = createProviderRegistry({
   anthropic,
   openai,
-  openrouter,
+  openrouter: openrouterV4,
   gateway,
   compatible,
   "claude-code": claudeCode,
