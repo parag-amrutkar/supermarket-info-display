@@ -23,7 +23,11 @@ Existing endpoints:
 
 ## Styling and types
 
-Global theme tokens live in `globals.css` (`@theme inline`) — Tailwind v4, CSS-first, no `tailwind.config.*`. Types like `LayoutProps<"/">` are Next 16 generated globals and need no import.
+Global theme tokens live in `globals.css` (`@theme inline`) — Tailwind v4, CSS-first, no `tailwind.config.*`. `components/CLAUDE.md` covers the palette and the traps in editing it.
+
+`layout.tsx` loads the theme's two fonts through `next/font/google` and exposes them on `<html>` as `--font-outfit` and `--font-fira-code`; `globals.css` points `--font-sans` and `--font-mono` at those. Neither file makes sense alone — change a font and you change both.
+
+Types like `LayoutProps<"/">` are Next 16 generated globals and need no import.
 
 ## Style
 
