@@ -523,6 +523,71 @@ export async function getVerifiedProduct(slug: string, storeId?: string): Promis
 }
 
 /**
+ * The authored answer bank for one product, flattened for a system prompt.
+ *
+ * This is the half of `ProductContent` no screen has ever rendered — ingredients,
+ * dosage, warnings, the written Q&A, and the names of neighbouring products. The
+ * three printed prompts on the product screen used to advertise it; a microphone
+ * replaced them, so the agent reaches it directly instead. It is also what lets a
+ * shopper standing at a product screen ask "will this make me drowsy?" with no
+ * product named at all.
+ *
+ * Prices and stock counts on `sameLine` and `alternatives` are deliberately left
+ * out, and so is `rating`. They are invented editorial numbers (see the note on
+ * `Rating`), and AGENTS.md is explicit that availability is only ever claimed
+ * from an inventory tool result — putting them in a prompt is exactly how an
+ * invented count gets spoken as fact.
+ */
+export function productAnswerBank(slug: string): string | null {
+  const product = getProductContent(slug);
+  if (!product) return null;
+
+  const lines = [
+    `Product: ${product.brand} ${product.name} (${product.form}).`,
+    `Category: ${product.category.join(" > ")}.`,
+    `Summary: ${product.summary}`,
+  ];
+
+  if (product.ageRestriction) {
+    lines.push(`Age restriction: ${product.ageRestriction}+ only, ID required at the register.`);
+  }
+  if (product.activeIngredients?.length) {
+    lines.push(
+      `Active ingredients: ${product.activeIngredients
+        .map((item) => `${item.name} ${item.amount} (${item.purpose})`)
+        .join("; ")}.`,
+    );
+  }
+  if (product.dosage?.length) {
+    lines.push(`Directions: ${product.dosage.map((row) => `${row.group} — ${row.instruction}`).join(" ")}`);
+  }
+  if (product.warnings.length) {
+    lines.push(`Warnings: ${product.warnings.join(" ")}`);
+  }
+  if (product.faqs.length) {
+    lines.push(`Answered questions: ${product.faqs.map((faq) => `Q: ${faq.question} A: ${faq.answer}`).join(" ")}`);
+  }
+  // Names only. The shopper asks "what else is there?" and gets real product
+  // names; whether any of them is on the shelf is an inventory question.
+  if (product.sameLine.length) {
+    lines.push(
+      `Others in this line (names only, check inventory for stock and price): ${product.sameLine
+        .map((item) => `${item.brand} ${item.name}`)
+        .join("; ")}.`,
+    );
+  }
+  if (product.alternatives.length) {
+    lines.push(
+      `Other brands (names only, check inventory for stock and price): ${product.alternatives
+        .map((item) => `${item.brand} ${item.name}`)
+        .join("; ")}.`,
+    );
+  }
+
+  return lines.join(" ");
+}
+
+/**
  * Shelf-ready label for a stock state. Kept with the data so no screen has to
  * decide what "low" means.
  *

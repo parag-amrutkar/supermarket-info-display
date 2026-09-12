@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { AdIntroScreen } from "@/components/kiosk/ad-intro-screen";
 import { AdLoopScreen } from "@/components/kiosk/ad-loop-screen";
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
 import { PinPad } from "@/components/kiosk/pin-pad";
@@ -29,18 +30,21 @@ import {
  *   boot → welcome (Beacon Box branding, quiet log-in)
  *        → picker  (which business owns this machine)
  *        → pin     (staff keypad)
+ *        → intro   (the spots this screen opens with, played once each in order)
  *        → ad      (full-bleed spot on a loop — only for a tenant carrying one)
  *        → display (tenant-branded home screen: top nav + push to talk)
  *                  → wayfinding (full-bleed store map to a product)
  *
- * `wayfinding` currently has no entry point. The home screen was stripped back
- * to the microphone, which took the "Find a product" tile with it; the step and
- * its screen are kept intact so answering a spoken question can route here once
- * the transcript is wired to a product lookup.
+ * `wayfinding` has no entry point inside this shell. A spoken question routes to
+ * `/map/<slug>` instead, which renders the same screen as a real route; the step
+ * and its screen are kept because the flow may want it back without one.
  *
- * A tenant carrying an `ad` (the bodega) rests on that spot after sign-in and
- * touching it anywhere opens the home screen; every other tenant goes straight
- * to the home screen. `signedInFlow()` below is the single place that decides.
+ * Two ad shapes, for two different businesses, and `signedInFlow()` below is the
+ * single place that decides between them. CVS carries an `intro`: a finite run of
+ * spots that plays through after staff sign in and then hands the machine over.
+ * The bodega carries an `ad`: one spot, looping, which is what that screen *is*
+ * when nobody is standing at it. Either way, touching the panel opens the home
+ * screen — a shopper never has to wait for an advertisement to finish.
  *
  * This is the app's only client boundary. `app/` stays server-only (see
  * `app/CLAUDE.md`), so all interactivity lives here and below.
@@ -56,18 +60,29 @@ type Flow =
   | { step: "welcome" }
   | { step: "picking" }
   | { step: "pin"; tenant: Tenant }
+  | { step: "intro"; tenant: Tenant; session: DemoSession; spots: TenantAd[] }
   | { step: "ad"; tenant: Tenant; session: DemoSession; ad: TenantAd }
   | { step: "signedIn"; tenant: Tenant; session: DemoSession }
   | { step: "wayfinding"; tenant: Tenant; session: DemoSession };
 
-/** Where a tenant lands once signed in. The step carries the ad rather than
- *  re-reading `tenant.ad` at the render site, so the screen takes a required
- *  prop and no call site needs a non-null assertion. */
-function signedInFlow(tenant: Tenant, session: DemoSession): Flow {
+/** Where a tenant sits when it is not playing an opening run: its own ad loop if
+ *  it has one, otherwise the home screen. The step carries the ad rather than
+ *  re-reading `tenant.ad` at the render site, so the screen takes a required prop
+ *  and no call site needs a non-null assertion. */
+function restingFlow(tenant: Tenant, session: DemoSession): Flow {
   const ad = tenant.ad;
   return ad
     ? { step: "ad", tenant, session, ad }
     : { step: "signedIn", tenant, session };
+}
+
+/** Where a tenant lands the moment staff sign in — through its opening spots
+ *  first, where it has them. */
+function signedInFlow(tenant: Tenant, session: DemoSession): Flow {
+  const spots = tenant.intro;
+  return spots?.length
+    ? { step: "intro", tenant, session, spots }
+    : restingFlow(tenant, session);
 }
 
 /** Shown for one frame while the persisted session is read. Must be what the
@@ -94,10 +109,12 @@ export function KioskShell({ tenants }: { tenants: Tenant[] }) {
     const session = readDemoSession();
     const tenant = session ? getTenant(session.tenantId) : undefined;
     // A reloaded kiosk returns to its resting screen, which for an ad tenant is
-    // the spot rather than the home screen.
+    // the spot rather than the home screen. `restingFlow` and not `signedInFlow`:
+    // a reload is not a sign-in, and replaying thirty seconds of opening spots
+    // every time the panel refreshes would be its own kind of bug.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFlow(
-      session && tenant ? signedInFlow(tenant, session) : { step: "welcome" },
+      session && tenant ? restingFlow(tenant, session) : { step: "welcome" },
     );
   }, []);
 
@@ -114,6 +131,7 @@ export function KioskShell({ tenants }: { tenants: Tenant[] }) {
 
   const branded =
     flow.step === "pin" ||
+    flow.step === "intro" ||
     flow.step === "ad" ||
     flow.step === "signedIn" ||
     flow.step === "wayfinding";
@@ -158,6 +176,17 @@ export function KioskShell({ tenants }: { tenants: Tenant[] }) {
         ) : flow.step === "wayfinding" ? (
           <WayfindingScreen
             onBack={() =>
+              setFlow({
+                step: "signedIn",
+                tenant: flow.tenant,
+                session: flow.session,
+              })
+            }
+          />
+        ) : flow.step === "intro" ? (
+          <AdIntroScreen
+            spots={flow.spots}
+            onOpenHome={() =>
               setFlow({
                 step: "signedIn",
                 tenant: flow.tenant,

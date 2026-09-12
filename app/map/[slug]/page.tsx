@@ -60,7 +60,6 @@ export default async function MapPage({ params }: MapPageProps) {
   return (
     <PanelFrame>
       <WayfindingRoute
-        backHref={`/product/${slug}`}
         productSlug={slug}
         productName={`${product.brand} ${product.name}`}
         directions={product.location}

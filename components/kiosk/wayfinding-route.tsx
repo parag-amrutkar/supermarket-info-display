@@ -15,18 +15,21 @@ type Directions = {
  * Adapts `WayfindingScreen` to a URL-reachable route.
  *
  * The screen takes `onBack` as a callback because inside `KioskShell` the flow
- * is state, not routes. Reached by URL there is no parent state to pop, so back
- * means "return to the product that sent you here" — pushed rather than
- * `router.back()`, which would land on whatever preceded it if the shopper
- * arrived from somewhere else.
+ * is state, not routes. Reached by URL, back means the store's own home screen —
+ * a shopper who has been given an aisle and a shelf is finished with the
+ * product, and the next thing they want is the microphone.
+ *
+ * Pushed rather than `router.back()`, which would land on whatever preceded it:
+ * the map is reached from a product screen and also straight from a spoken
+ * question on the home screen, so history is not a reliable destination. `/` is
+ * the kiosk shell, which rehydrates the signed-in tenant and lands on that
+ * tenant's branded home screen.
  */
 export function WayfindingRoute({
-  backHref,
   productSlug,
   productName,
   directions,
 }: {
-  backHref: string;
   productSlug: string;
   productName: string;
   directions: Directions;
@@ -35,7 +38,7 @@ export function WayfindingRoute({
 
   return (
     <WayfindingScreen
-      onBack={() => router.push(backHref)}
+      onBack={() => router.push("/")}
       productSlug={productSlug}
       productName={productName}
       directions={directions}

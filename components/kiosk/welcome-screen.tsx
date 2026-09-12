@@ -132,9 +132,6 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
           >
             Select store to start asking
           </button>
-          <p className="text-[1.8cqw] text-muted-foreground">
-            Choose this kiosk&apos;s store to get inventory answers.
-          </p>
           <p className="text-[1.7cqw] text-muted-foreground">
             Demo build · v0.1.0
           </p>

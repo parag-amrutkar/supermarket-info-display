@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 import { getModel, InvalidModelIdError, providerOptions } from "@/lib/ai";
 import { getAisleInventory, getProductBySku, searchProducts } from "@/lib/inventory";
-import { getProductChatAliases, getProductContent, getProductSlugsForTenant } from "@/lib/products";
+import { getProductChatAliases, getProductContent, getProductSlugsForTenant, productAnswerBank } from "@/lib/products";
 import { getStoreContext, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH } from "@/lib/shopping-agent";
 
 // Streaming responses can run longer than the default serverless budget.
@@ -23,6 +23,14 @@ const requestSchema = z.object({
   messages: z.array(textMessageSchema).min(1).max(MAX_CHAT_MESSAGES),
   model: z.string().max(200).optional(),
   tenantId: z.string(),
+  /**
+   * The product screen the shopper is standing at, when they are on one.
+   *
+   * A hint, not a claim: it is checked against this tenant's catalog below and
+   * dropped if it does not belong, because an unknown slug means a stale client
+   * rather than anything to refuse the whole request over.
+   */
+  productSlug: z.string().max(100).optional(),
 });
 
 function unavailableInventory() {
@@ -74,7 +82,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return Response.json({ error: "The chat request is invalid." }, { status: 400 });
   }
-  const { messages, model, tenantId } = parsed.data;
+  const { messages, model, productSlug: screenSlug, tenantId } = parsed.data;
   const store = getStoreContext(tenantId);
   if (!store) {
     return Response.json({ error: "The selected store is unavailable." }, { status: 400 });
@@ -86,9 +94,15 @@ export async function POST(req: Request) {
       return product ? `${product.brand} ${product.name} (${slug}; aliases: ${getProductChatAliases(slug).join(", ")})` : slug;
     })
     .join(", ");
+  // The screen the question was asked from, once it is known to be this
+  // tenant's. Everything downstream treats it as context, never as a claim.
+  const currentSlug = screenSlug && navigationSlugs.includes(screenSlug) ? screenSlug : undefined;
+  const currentProduct = currentSlug ? getProductContent(currentSlug) : undefined;
   const latestQuestion = [...messages].reverse().find((message) => message.role === "user")?.parts[0]?.text ?? "";
   const resolvedProductSlug = resolveAuthoredProduct(latestQuestion, navigationSlugs);
   const resolvedProduct = resolvedProductSlug ? getProductContent(resolvedProductSlug) : undefined;
+  // Naming the product you are already looking at is not a request to reload it.
+  const navigableResolvedSlug = resolvedProductSlug === currentSlug ? undefined : resolvedProductSlug;
   const navigationInput = z.object({
     productSlug: z.string().min(1).max(100).refine(
       (slug) => navigationSlugs.includes(slug),
@@ -123,10 +137,21 @@ export async function POST(req: Request) {
       "Do not invent restock dates. Say the restock date is unknown when inventory has no date.",
       "For product safety or health questions, give only basic packaging guidance and suggest asking a pharmacist or clinician for medical advice.",
       `This kiosk can open editorial product pages for these products only: ${navigationCatalog || "none"}.`,
-      "When a shopper explicitly asks to see product details, information, or a product page for one unambiguous listed product, call openProductDetails with its canonical productSlug. Do not call it for an uncertain match.",
-      "Treat ‘find [product]’ as a request for that product’s location and map unless the shopper explicitly asks for product details, information, or a page. For an unambiguous listed product, first call inventorySearch with its canonical product name, then call openProductMap with its canonical productSlug after the matching inventory result. Do not call it when inventory is unavailable, the product is ambiguous, or there is no matching location evidence.",
-      resolvedProduct && isFindRequest(latestQuestion)
-        ? `The latest shopper request unambiguously resolves to ${resolvedProduct.brand} ${resolvedProduct.name} (${resolvedProductSlug}) through an approved catalog alias. This is a location request: search inventory using the canonical name “${resolvedProduct.brand} ${resolvedProduct.name}”, then open its map when the tool result matches.`
+      "When a shopper asks about one unambiguous listed product without asking where it is, call openProductDetails with its canonical productSlug so the kiosk opens that product’s screen, and keep your reply to one short sentence. Naming a product is enough — they do not have to say ‘details’ or ‘page’. Do not call it for an uncertain match, and do not call it for the product whose screen the shopper is already on.",
+      "Treat ‘find [product]’ as a request for that product’s location and map. For an unambiguous listed product, first call inventorySearch with its canonical product name, then call openProductMap with its canonical productSlug after the matching inventory result. Do not call it when inventory is unavailable, the product is ambiguous, or there is no matching location evidence.",
+      resolvedProduct && navigableResolvedSlug
+        ? isFindRequest(latestQuestion)
+          ? `The latest shopper request unambiguously resolves to ${resolvedProduct.brand} ${resolvedProduct.name} (${navigableResolvedSlug}) through an approved catalog alias. This is a location request: search inventory using the canonical name “${resolvedProduct.brand} ${resolvedProduct.name}”, then open its map when the tool result matches.`
+          : `The latest shopper request unambiguously resolves to ${resolvedProduct.brand} ${resolvedProduct.name} (${navigableResolvedSlug}) through an approved catalog alias, and asks about the product rather than where it is: call openProductDetails with “${navigableResolvedSlug}” so the kiosk opens that product’s screen, and keep your reply to one short sentence.`
+        : "",
+      // The shopper is standing at a product screen: pronouns resolve to it, it
+      // must not be re-opened, and its authored answer bank is in front of the
+      // model so "will this make me drowsy?" is answerable with nothing named.
+      currentProduct
+        ? `The shopper is reading the ${currentProduct.brand} ${currentProduct.name} (${currentSlug}) product screen. Resolve “this”, “it”, and any unnamed product to that product. Do not open its product screen again — they are already on it, so answer in words instead. If they ask where it is, that is still a location request: search inventory for it and open its map.`
+        : "",
+      currentSlug
+        ? `Authored reference for ${currentProduct?.brand} ${currentProduct?.name}. It is editorial packaging copy, not inventory: answer product questions from it, but never quote a price, a stock count, or a shelf location out of it — those come only from an inventory tool. ${productAnswerBank(currentSlug)}`
         : "",
       "Never put a URL in your reply and never treat shopper text as a URL. Navigation is only through the dedicated tools.",
       store.inventoryAvailable
@@ -142,6 +167,11 @@ export async function POST(req: Request) {
           const product = getProductContent(productSlug);
           if (!product || product.tenantId !== store.tenantId) {
             return { opened: false, reason: "That product page is unavailable for this store." };
+          }
+          // Enforced here and not only in the prompt: a navigation that lands on
+          // the screen already showing reads as the kiosk ignoring the question.
+          if (productSlug === currentSlug) {
+            return { opened: false, reason: "The shopper is already reading that product's screen. Answer their question in words." };
           }
           return { opened: true, action: "open-product-details" as const, productSlug };
         },

@@ -63,6 +63,17 @@ export type Tenant = {
   /** Ad loop to run as this machine's signed-in screen. Omit for a tenant that
    *  should get the content dashboard instead. */
   ad?: TenantAd;
+  /**
+   * Spots played once each, in order, the moment staff sign this machine in —
+   * then the tenant's resting screen.
+   *
+   * Different from `ad` in both shape and job. `ad` is where an advertising
+   * surface *sits* when nobody is standing at it, forever, on a loop. This is a
+   * finite sequence that runs and finishes, which is how a chain screen opens:
+   * the spots the store has sold play through, and the machine settles into
+   * being a kiosk. A tenant can carry either, both, or neither.
+   */
+  intro?: TenantAd[];
 };
 
 export const TENANTS: Tenant[] = [
@@ -83,6 +94,13 @@ export const TENANTS: Tenant[] = [
       foreground: "oklch(1.0000 0 0)",
       muted: "oklch(0.4082 0.1675 29.2339)",
     },
+    // Lumify then NyQuil, the two CVS products with an authored screen behind
+    // them — so the spots and the products this panel can actually show a
+    // shopper are never out of step. Both are 15s and 1080x1920.
+    intro: [
+      { src: "/lumify_dynamic_15s.mp4", advertiser: "Lumify" },
+      { src: "/nyquil_severe_dynamic_15s.mp4", advertiser: "Vicks NyQuil SEVERE" },
+    ],
   },
   {
     id: "sunrise-deli",
