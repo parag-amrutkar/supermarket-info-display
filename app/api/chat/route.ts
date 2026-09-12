@@ -199,7 +199,12 @@ export async function POST(req: Request) {
       }),
     },
     stopWhen: stepCountIs(3),
-    maxOutputTokens: 300,
+    // Reasoning tokens are spent from this same budget, so 300 — enough for the
+    // two or three sentences a kiosk answer should be — was being consumed by
+    // thinking alone, and the shopper got `finishReason: "length"` with an
+    // empty reply. Answers stay short because the system prompt says so, not
+    // because the ceiling cuts them off.
+    maxOutputTokens: 1500,
     abortSignal: req.signal,
   });
 
