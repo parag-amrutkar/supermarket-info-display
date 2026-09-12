@@ -44,7 +44,7 @@ type Flow =
 function BootSplash() {
   return (
     <div className="@container flex h-full w-full flex-col items-center justify-center gap-[3cqw]">
-      <BeaconMark className="size-[20cqw] animate-pulse text-primary" />
+      <BeaconMark className="size-[20cqw] text-primary motion-safe:animate-pulse" />
       <span className="text-[2.2cqw] tracking-[0.3em] text-muted-foreground uppercase">
         Beacon Box
       </span>

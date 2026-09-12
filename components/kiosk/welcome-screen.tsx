@@ -83,7 +83,7 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
         <header className="flex shrink-0 items-center justify-between text-[1.9cqw] tracking-[0.24em] text-muted-foreground uppercase">
           <span className="font-semibold">Beacon Box</span>
           <span className="flex items-center gap-[0.8em]">
-            <span className="size-[0.6em] animate-pulse rounded-full bg-accent" />
+            <span className="size-[0.6em] rounded-full bg-accent motion-safe:animate-pulse" />
             Device BB-0471
           </span>
         </header>
