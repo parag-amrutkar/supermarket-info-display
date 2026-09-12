@@ -53,6 +53,19 @@ export type Rating = {
   count: number;
 };
 
+/**
+ * A price promotion.
+ *
+ * Editorial for now, but it belongs in inventory beside `price_usd` — a sale is
+ * exactly the kind of fact that changes without anyone touching a content file.
+ */
+export type Promotion = {
+  /** Short shelf-barker, e.g. "Save $4". Rendered uppercase. */
+  label: string;
+  /** Pre-promotion price, shown struck through next to the live one. */
+  wasPrice: string;
+};
+
 /** The fields inventory owns. Everything else on a product is editorial. */
 export type InventoryFacts = {
   size: string;
@@ -97,6 +110,15 @@ export type ProductContent = {
   /** Join key into the inventory tables. */
   sku: string;
   /**
+   * Which machine this product is shown on, as a `lib/tenants.ts` id.
+   *
+   * The kiosk is a tenant's own screen once signed in, so a product page has to
+   * wear the store's identity too — a CVS-red pharmacy screen and a bodega's
+   * green awning are different products to the shopper standing in front of
+   * them, even when the layout is identical.
+   */
+  tenantId: string;
+  /**
    * Category path, broad to narrow. Richer than inventory, which carries only
    * `category` and `subcategory`. Orientation only — nothing links yet.
    */
@@ -109,13 +131,24 @@ export type ProductContent = {
   image?: string;
   /** One line, read at a glance from a few feet back. */
   summary: string;
+  /**
+   * Minimum age to buy, where one applies.
+   *
+   * On the screen rather than only in the answer bank: a machine that sends
+   * someone to the aisle for something they cannot legally buy has wasted their
+   * trip, and "they could have asked" is not a defence for a compliance rule.
+   */
+  ageRestriction?: number;
+  /** Set to flag a price promotion on the screen. */
+  promotion?: Promotion;
   rating: Rating;
   /** Two words each. At kiosk distance all three read in a single glance, which
    *  beats teaching exact phrasing — the agent accepts any wording, so a prompt
    *  only has to advertise the topic. */
   suggestedQuestions: string[];
-  activeIngredients: ActiveIngredient[];
-  dosage: DosageRow[];
+  /** Drug products only. A beverage has neither. */
+  activeIngredients?: ActiveIngredient[];
+  dosage?: DosageRow[];
   warnings: string[];
   faqs: FaqItem[];
   sameLine: RelatedProduct[];
@@ -129,6 +162,7 @@ export type Product = ProductContent & InventoryFacts;
 const nyquilSevere: ProductContent = {
   slug: "nyquil-severe",
   sku: "CVS-9100001",
+  tenantId: "cvs-2841",
   category: [
     "Health & Medicine",
     "Cough, Cold & Flu",
@@ -212,7 +246,10 @@ const nyquilSevere: ProductContent = {
   fallback: {
     size: "12 FL OZ · Berry",
     price: "$13.49",
-    location: { aisle: "Aisle 17", rack: "Rack 1", shelf: "Shelf 1", section: "Cough Medicine" },
+    // Matches the wayfinding render, which draws a route to aisle 7 and the
+    // top shelf of bay 3. Those numbers are pixels in a pre-rendered MP4, so
+    // the data bends to the video rather than the other way round.
+    location: { aisle: "Aisle 7", rack: "Rack 3", shelf: "Shelf 4", section: "Cough Medicine" },
     stock: { status: "in", count: 8 },
   },
 };
@@ -220,6 +257,7 @@ const nyquilSevere: ProductContent = {
 const lumify: ProductContent = {
   slug: "lumify",
   sku: "CVS-9100002",
+  tenantId: "cvs-2841",
   category: [
     "Health & Medicine",
     "Eye Care",
@@ -305,9 +343,91 @@ const lumify: ProductContent = {
   },
 };
 
+const whiteClaw: ProductContent = {
+  slug: "white-claw",
+  // The bodega, not the pharmacy — and the machine already carrying the White
+  // Claw ad loop (see `lib/tenants.ts`).
+  tenantId: "sunrise-deli",
+  // TODO: reconcile with whatever SKU lands on main. Deliberately not added to
+  // the inventory CSV — a teammate is adding this product there, and two rows
+  // for one item is worse than none. Until then the fallback below is what
+  // renders, which is also true of every product when Supabase is unconfigured.
+  sku: "CVS-9100003",
+  category: [
+    "Beer, Wine & Spirits",
+    "Beer & Seltzer",
+    "Hard Seltzer",
+    "Variety Packs",
+  ],
+  brand: "White Claw",
+  name: "Hard Seltzer",
+  form: "Variety Pack No. 1",
+  image: "/white-claw-hero.jpg",
+  summary:
+    "Four flavours in the box — pineapple, natural lime, black cherry and raspberry.",
+  ageRestriction: 21,
+  promotion: { label: "Save $4", wasPrice: "$18.99" },
+  rating: { score: 4.5, count: 8932 },
+  suggestedQuestions: [
+    // Flavour is the line axis here, the way size is for Lumify and formula is
+    // for NyQuil. Same three buckets, product-appropriate wording.
+    "Other flavors?",
+    "Other brands?",
+    "Product questions?",
+  ],
+  warnings: [
+    "Alcoholic beverage. You must be 21 or over to buy this, and ID is required at the register.",
+    "Government warning: women should not drink alcoholic beverages during pregnancy because of the risk of birth defects.",
+    "Do not drive a car or operate machinery after drinking. Alcohol may impair your ability to do so.",
+  ],
+  faqs: [
+    {
+      question: "What flavours are in the variety pack?",
+      answer:
+        "No. 1 has pineapple, natural lime, black cherry and raspberry — three cans of each, twelve in total.",
+    },
+    {
+      question: "How strong is it?",
+      answer:
+        "5% ABV, the same as most lagers. Each can is 12 fluid ounces.",
+    },
+    {
+      question: "How many calories?",
+      answer:
+        "100 per can, with 2 grams of carbohydrate and no added sugar.",
+    },
+    {
+      question: "Is it gluten free?",
+      answer:
+        "Yes. It is brewed from a gluten-free malted alternative rather than barley.",
+    },
+    {
+      question: "Can I buy a single flavour instead?",
+      answer:
+        "Yes — black cherry and mango come as their own twelve-packs, on the same shelf as the variety packs.",
+    },
+  ],
+  sameLine: [
+    { brand: "White Claw", name: "Hard Seltzer Variety Pack No. 3", price: "$18.99", stock: { status: "in", count: 15 } },
+    { brand: "White Claw", name: "Black Cherry 12 Pack", price: "$18.99", stock: { status: "in", count: 4 } },
+    { brand: "White Claw", name: "Surge Variety Pack", price: "$21.99", stock: { status: "out" } },
+  ],
+  alternatives: [
+    { brand: "Truly", name: "Hard Seltzer Berry Mix Pack", price: "$17.99", stock: { status: "in", count: 12 } },
+    { brand: "Bud Light", name: "Seltzer Variety Pack", price: "$16.49", stock: { status: "in", count: 7 } },
+  ],
+  fallback: {
+    size: "12 \u00D7 12 FL OZ \u00B7 5% ABV",
+    price: "$14.99",
+    location: { aisle: "Aisle 4", rack: "Rack 2", shelf: "Shelf 1", section: "Beverages" },
+    stock: { status: "in", count: 24 },
+  },
+};
+
 const CONTENT: Record<string, ProductContent> = {
   [nyquilSevere.slug]: nyquilSevere,
   [lumify.slug]: lumify,
+  [whiteClaw.slug]: whiteClaw,
 };
 
 export const productSlugs = Object.keys(CONTENT);

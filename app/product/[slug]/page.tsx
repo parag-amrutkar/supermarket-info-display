@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PanelFrame } from "@/components/kiosk/panel-frame";
 import { ProductScreen } from "@/components/kiosk/product-screen";
 import { getProduct } from "@/lib/products";
+import { getTenant } from "@/lib/tenants";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
@@ -40,7 +41,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <PanelFrame>
-      <ProductScreen product={product} />
+      <ProductScreen product={product} tenant={getTenant(product.tenantId)} />
     </PanelFrame>
   );
 }
