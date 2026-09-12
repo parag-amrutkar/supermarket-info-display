@@ -5,13 +5,16 @@ import type { CSSProperties } from "react";
 import { cn } from "cn";
 
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
-import { KioskVoiceInput } from "@/components/kiosk/voice-input";
 
 /**
  * The screen a Beacon Box sits on all day: full-bleed product branding, with a
  * single quiet way in. The log-in control is deliberately small and bottom-
  * anchored — this is a customer-facing display, and staff sign-in is the
  * exception, not the call to action.
+ *
+ * No microphone here on purpose. Asking a question belongs to the store's own
+ * home screen, past sign-in (`push-to-talk.tsx`); this screen is the attract
+ * loop and the way in, nothing else.
  *
  * It runs a continuous 28s attract loop with a full -> ambient intensity arc:
  * the mark draws itself in, the wordmark and its one line of copy resolve on a
@@ -122,7 +125,6 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
           style={{ "--attract-delay": "0.7s" } as CSSProperties}
           className="flex w-full shrink-0 flex-col items-center gap-[2.2cqw] motion-safe:animate-attract-enter"
         >
-          <KioskVoiceInput compact />
           <button
             type="button"
             onClick={onLogin}

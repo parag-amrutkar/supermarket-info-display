@@ -29,8 +29,13 @@ import {
  *        → picker  (which business owns this machine)
  *        → pin     (staff keypad)
  *        → ad      (full-bleed spot on a loop — only for a tenant carrying one)
- *        → display (tenant-branded home screen)
+ *        → display (tenant-branded home screen: top nav + push to talk)
  *                  → wayfinding (full-bleed store map to a product)
+ *
+ * `wayfinding` currently has no entry point. The home screen was stripped back
+ * to the microphone, which took the "Find a product" tile with it; the step and
+ * its screen are kept intact so answering a spoken question can route here once
+ * the transcript is wired to a product lookup.
  *
  * A tenant carrying an `ad` (the bodega) rests on that spot after sign-in and
  * touching it anywhere opens the home screen; every other tenant goes straight
@@ -170,18 +175,7 @@ export function KioskShell({ tenants }: { tenants: Tenant[] }) {
             }
           />
         ) : (
-          <TenantDisplay
-            tenant={flow.tenant}
-            session={flow.session}
-            onSignOut={handleSignOut}
-            onOpenWayfinding={() =>
-              setFlow({
-                step: "wayfinding",
-                tenant: flow.tenant,
-                session: flow.session,
-              })
-            }
-          />
+          <TenantDisplay tenant={flow.tenant} onSignOut={handleSignOut} />
         )}
       </div>
     </div>
