@@ -40,7 +40,7 @@ Directory-scoped `CLAUDE.md` files carry the specifics and load when you work in
 
 - `lib/CLAUDE.md` — registry mechanics, how to add a provider, AI SDK v7 traps
 - `app/CLAUDE.md` — route handler conventions and streaming-error behaviour
-- `components/CLAUDE.md` — Base UI (not Radix), `cn` import convention, Tailwind v4
+- `components/CLAUDE.md` — Base UI (not Radix), `cn` import convention, Tailwind v4 theme and fonts
 
 Two cross-cutting gotchas worth knowing before you open either directory: the shadcn components are built on **Base UI, not Radix**, so most training-data shadcn examples are wrong here; and **AI SDK v7 diverges from v5/v6-era knowledge**, so verify shapes against the installed `.d.ts` under `node_modules/` rather than from memory.
 
