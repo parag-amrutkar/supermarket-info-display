@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "inventory:validate": "node scripts/import-cvs-inventory.mjs",
+    "inventory:import": "node --env-file-if-exists=.env.local scripts/import-cvs-inventory.mjs --apply"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.53",

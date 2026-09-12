@@ -58,3 +58,27 @@ npx supabase gen types typescript --project-id <project-ref> > lib/supabase/data
 
 Pass the generated `Database` type to `createBrowserClient<Database>()` and
 `createServerClient<Database>()` for schema-aware queries.
+
+## Inventory database
+
+The inventory schema is defined in `supabase/migrations`. It separates the
+global product catalog from store-specific quantity, price, and shelf location.
+Kiosk clients have read-only access to a minimal public view and search RPC;
+table mutations and import history are not exposed to browser roles.
+
+Validate the bundled demo inventory without touching the database:
+
+```bash
+npm run inventory:validate
+```
+
+To load it, first apply the Supabase migrations, then set the server-only
+`SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and run:
+
+```bash
+npm run inventory:import
+```
+
+The import is atomic and idempotent by file checksum. The CVS file contains
+simulated prices, quantities, and shelf locations, so imported rows retain the
+`demo_simulated` provenance and the assistant labels them as demo inventory.
