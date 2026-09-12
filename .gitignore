@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# agent skills — hydrated from skills-lock.json, not vendored
+# run: npx skills add heygen-com/hyperframes --full-depth
+/.agents
+/.claude/skills

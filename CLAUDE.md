@@ -48,6 +48,18 @@ Two cross-cutting gotchas worth knowing before you open either directory: the sh
 
 `.env.example` documents every key. `.gitignore` blanket-ignores `.env*` with a `!.env.example` negation. Only the key for the provider actually in use is required; browsing the OpenRouter model catalog needs none.
 
+## Agent skills
+
+Twenty HyperFrames skills — video and motion-graphics authoring — are pinned at project scope in `skills-lock.json` (source `heygen-com/hyperframes`, one content hash per skill). The skill files themselves are **not** committed: 914 files, 19 MB of fonts, audio, and texture assets. Hydrate them with
+
+```bash
+npx skills add heygen-com/hyperframes --full-depth
+```
+
+which writes `.agents/skills/` (a universal layout other agents read too) and symlinks `.claude/skills/` into it. Both paths are gitignored — the lock file is the source of truth, so re-running the command reproduces exactly the pinned versions.
+
+`/hyperframes` is the entry point: read it first for any request to make, edit, or render a video, and it routes to the owning workflow. Project-scope skills shadow same-named ones in `~/.claude/skills/`, so this pin governs here even when a different set is installed globally.
+
 ## Note
 
 An OpenAI Codex config exists at `~/.codex/config.toml`. If you want its MCP servers, slash commands, subagents, skills, or instructions brought into Claude Code, reply `/import` to scan and list what's importable, then `/import --yes=<digest>` (the scan output names the digest) to apply the user-level items. If `/import` isn't available on this surface, run `claude import` from a terminal.
