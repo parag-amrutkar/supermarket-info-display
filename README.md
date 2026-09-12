@@ -1,5 +1,38 @@
 # Supermarket Info Display
 
+## Voice transcription
+
+The kiosk welcome and signed-in store screens support tap-to-speak questions
+with a typed fallback through `components/kiosk/voice-input.tsx`. The panel
+uses the store's brand colors and the shared `useVoiceInput` controller; moving
+between screens unmounts it and cancels any pending recording or upload. Set the
+server-only `OPENROUTER_API_KEY` in `.env.local`; the key is never sent to the
+browser. `TRANSCRIPTION_MODEL` is optional and defaults to `openai/gpt-transcribe`.
+
+Microphone recording requires HTTPS or `localhost` and browser permission. Each
+recording stops automatically after 20 seconds. The reusable controller in
+`hooks/use-voice-input.ts` exposes `startListening()`, `stopListening()`, and
+`cancelListening()` so a future presence sensor can activate the same flow.
+
+This MVP captures and transcribes the question. It does not submit the text to
+inventory search yet.
+
+The existing Supabase proxy also requires the Supabase environment variables
+below, including for the home page and transcription route.
+
+Run the deterministic voice regression checks from the repository root:
+
+```bash
+node scripts/verify-voice-input.mjs
+```
+
+These simulate controller lifecycle events and the upstream transcription API;
+they do not record the microphone or spend API credits. Also test a real spoken
+question on the target kiosk to verify permissions, recording format, and
+transcription accuracy. If this environment blocks Turbopack's CSS worker from
+opening a local port, use `npm run build -- --webpack` to verify the production
+build.
+
 ## Supabase integration
 
 The app uses `@supabase/ssr` so the same cookie-backed authentication session is

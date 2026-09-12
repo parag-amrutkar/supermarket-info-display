@@ -5,6 +5,7 @@ import { CalendarDays, Image as ImageIcon, LogOut, Tag } from "lucide-react";
 import { cn } from "cn";
 
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
+import { KioskVoiceInput } from "@/components/kiosk/voice-input";
 import { AwningStripe, TenantWordmark } from "@/components/kiosk/tenant-wordmark";
 import type { DemoSession } from "@/lib/demo-auth";
 import type { Tenant } from "@/lib/tenants";
@@ -107,7 +108,7 @@ export function TenantDisplay({
 
       {tenant.brand.accent ? <AwningStripe className="h-[2cqw] shrink-0" /> : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-[3cqw] p-[5cqw]">
+      <div className="flex min-h-0 flex-1 flex-col gap-[3cqw] overflow-y-auto p-[5cqw]">
         <div className="flex items-baseline justify-between gap-[2cqw]">
           <h1 className="text-[3.6cqw] leading-tight font-semibold">
             Signed in · {tenant.name}
@@ -119,6 +120,8 @@ export function TenantDisplay({
         <p className="text-[2.1cqw] text-muted-foreground">
           {tenant.address} — this screen is now managed by this account.
         </p>
+
+        <KioskVoiceInput />
 
         <ContentSlot
           icon={ImageIcon}

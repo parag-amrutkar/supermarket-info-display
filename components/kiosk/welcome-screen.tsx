@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { cn } from "cn";
 
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
+import { KioskVoiceInput } from "@/components/kiosk/voice-input";
 
 /**
  * The screen a Beacon Box sits on all day: full-bleed product branding, with a
@@ -79,7 +80,7 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
 
       {/* Content column. The slow drift is burn-in mitigation, not decoration —
           nothing bright sits on the same pixel for more than a few minutes. */}
-      <div className="relative flex h-full w-full flex-col gap-[5cqw] px-[6cqw] py-[7cqw] motion-safe:animate-attract-shift">
+      <div className="relative flex h-full w-full flex-col gap-[3.5cqw] px-[6cqw] py-[5cqw] motion-safe:animate-attract-shift">
         <header className="flex shrink-0 items-center justify-between text-[1.9cqw] tracking-[0.24em] text-muted-foreground uppercase">
           <span className="font-semibold">Beacon Box</span>
           <span className="flex items-center gap-[0.8em]">
@@ -88,10 +89,10 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
           </span>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[4cqw] text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[3cqw] text-center">
           <div className="motion-safe:animate-attract-breathe">
             <BeaconMark
-              className="size-[26cqw] text-primary"
+              className="size-[22cqw] text-primary"
               parts={{
                 box: "[stroke-dasharray:1] motion-safe:animate-attract-draw",
                 core: "[transform-box:fill-box] [transform-origin:center] motion-safe:animate-attract-core",
@@ -104,7 +105,7 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
           </div>
 
           <div className="space-y-[1.5cqw]">
-            <h1 className="text-[12cqw] leading-[0.92] font-semibold tracking-[-0.035em] motion-safe:animate-attract-rise">
+            <h1 className="text-[9.5cqw] leading-[0.92] font-semibold tracking-[-0.035em] motion-safe:animate-attract-rise">
               Beacon Box
             </h1>
 
@@ -119,8 +120,9 @@ export function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
 
         <div
           style={{ "--attract-delay": "0.7s" } as CSSProperties}
-          className="flex shrink-0 flex-col items-center gap-[2.5cqw] motion-safe:animate-attract-enter"
+          className="flex w-full shrink-0 flex-col items-center gap-[2.2cqw] motion-safe:animate-attract-enter"
         >
+          <KioskVoiceInput compact />
           <button
             type="button"
             onClick={onLogin}
