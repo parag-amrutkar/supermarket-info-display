@@ -7,7 +7,7 @@ import { LoaderCircle, RotateCcw, Send, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { KioskVoiceInput } from "@/components/kiosk/voice-input";
-import { chatStorageKey, isStoredChat, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH, navigationFromMessage, textFromMessage } from "@/lib/shopping-agent";
+import { chatStorageKey, isStoredChat, MAX_CHAT_TEXT_LENGTH, navigationFromMessage, textFromMessage, toSafeMessages } from "@/lib/shopping-agent";
 import type { DemoSession } from "@/lib/demo-auth";
 import type { Tenant } from "@/lib/tenants";
 
@@ -26,17 +26,6 @@ function loadConversation(key: string): UIMessage[] {
   } catch {
     return [];
   }
-}
-
-function toSafeMessages(messages: UIMessage[]): UIMessage[] {
-  return messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message) => {
-      const text = textFromMessage(message).slice(0, MAX_CHAT_TEXT_LENGTH);
-      return { id: message.id, role: message.role, parts: text ? [{ type: "text" as const, text }] : [] };
-    })
-    .filter((message) => message.parts.length > 0)
-    .slice(-MAX_CHAT_MESSAGES);
 }
 
 function persistConversation(key: string, messages: UIMessage[]) {

@@ -46,6 +46,24 @@ export function textFromMessage(message: UIMessage): string {
     .trim();
 }
 
+/**
+ * Strip a conversation down to the completed plain text the chat API accepts.
+ *
+ * Tool parts, reasoning, and partial streams are all dropped: the route
+ * validates messages as text-only, and a navigation destination must come from
+ * a fresh server-executed tool call rather than from replayed history.
+ */
+export function toSafeMessages(messages: UIMessage[]): UIMessage[] {
+  return messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => {
+      const text = textFromMessage(message).slice(0, MAX_CHAT_TEXT_LENGTH);
+      return { id: message.id, role: message.role, parts: text ? [{ type: "text" as const, text }] : [] };
+    })
+    .filter((message) => message.parts.length > 0)
+    .slice(-MAX_CHAT_MESSAGES);
+}
+
 export function isStoredChat(value: unknown): value is UIMessage[] {
   if (!Array.isArray(value) || value.length > MAX_CHAT_MESSAGES) return false;
   return value.every((message) => {

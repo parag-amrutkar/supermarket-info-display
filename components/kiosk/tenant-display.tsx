@@ -17,7 +17,8 @@ import type { Tenant } from "@/lib/tenants";
  * screen before any of the type is legible, and it never asks to be touched, so
  * a shopper walking up still has exactly one thing to do.
  *
- * `relative`, because the transcript flash positions against this element.
+ * `relative`, because the transcript flash and the answer that follows it both
+ * position against this element rather than the viewport.
  */
 
 /**
@@ -107,7 +108,7 @@ export function TenantDisplay({
         />
       </div>
 
-      <PushToTalk />
+      <PushToTalk tenant={tenant} />
     </div>
   );
 }
