@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="112" height="112" fill="none" role="img" aria-label="Beacon Box">
+  <title>Beacon Box</title>
+  <!-- Kept in sync with components/kiosk/beacon-mark.tsx. That component draws
+       in currentColor; this standalone copy bakes in the brand token (#FF00C8) so it
+       renders the same on GitHub in both light and dark. -->
+  <!-- the box -->
+  <rect x="13" y="25" width="22" height="16" rx="3.5" stroke="#FF00C8" stroke-width="3"/>
+  <circle cx="24" cy="33" r="2.6" fill="#FF00C8"/>
+  <!-- the signal -->
+  <path d="M16.5 18.5a10.6 10.6 0 0 1 15 0" stroke="#FF00C8" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+  <path d="M11 13a18.4 18.4 0 0 1 26 0" stroke="#FF00C8" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+</svg>
