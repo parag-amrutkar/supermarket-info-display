@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { getModel, InvalidModelIdError, providerOptions } from "@/lib/ai";
 import { getAisleInventory, getProductBySku, searchProducts } from "@/lib/inventory";
+import { getProductChatAliases, getProductContent, getProductSlugsForTenant } from "@/lib/products";
 import { getStoreContext, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH } from "@/lib/shopping-agent";
 
 // Streaming responses can run longer than the default serverless budget.
@@ -29,6 +30,28 @@ function unavailableInventory() {
     available: false,
     reason: "Inventory is not configured for this store.",
   };
+}
+
+function normalizeShopperText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function resolveAuthoredProduct(question: string, slugs: readonly string[]) {
+  const normalizedQuestion = normalizeShopperText(question);
+  // A generic NyQuil request can resolve to the authored NyQuil screen, but a
+  // shopper who specifies another formula or form must stay in chat so the
+  // inventory search can disambiguate it rather than opening the wrong page.
+  if (/\b(dayquil|liqui\s?caps|children s|kids|regular)\b/.test(normalizedQuestion)) return undefined;
+  const paddedQuestion = ` ${normalizedQuestion} `;
+  const matches = slugs.filter((slug) =>
+    getProductChatAliases(slug).some((alias) => paddedQuestion.includes(` ${normalizeShopperText(alias)} `)),
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function isFindRequest(question: string) {
+  return !/\b(details?|information|info|product page|page)\b/i.test(question)
+    && /\b(find|where|location|map|directions|guide)\b/i.test(question);
 }
 
 async function inventoryTool<T>(work: () => Promise<T>) {
@@ -56,6 +79,22 @@ export async function POST(req: Request) {
   if (!store) {
     return Response.json({ error: "The selected store is unavailable." }, { status: 400 });
   }
+  const navigationSlugs = getProductSlugsForTenant(store.tenantId);
+  const navigationCatalog = navigationSlugs
+    .map((slug) => {
+      const product = getProductContent(slug);
+      return product ? `${product.brand} ${product.name} (${slug}; aliases: ${getProductChatAliases(slug).join(", ")})` : slug;
+    })
+    .join(", ");
+  const latestQuestion = [...messages].reverse().find((message) => message.role === "user")?.parts[0]?.text ?? "";
+  const resolvedProductSlug = resolveAuthoredProduct(latestQuestion, navigationSlugs);
+  const resolvedProduct = resolvedProductSlug ? getProductContent(resolvedProductSlug) : undefined;
+  const navigationInput = z.object({
+    productSlug: z.string().min(1).max(100).refine(
+      (slug) => navigationSlugs.includes(slug),
+      "This product is not in the selected store's catalog.",
+    ),
+  });
 
   // `model` is an optional "<provider>:<model>" override; omitted, it falls
   // back to AI_MODEL and then to the default.
@@ -83,12 +122,54 @@ export async function POST(req: Request) {
       "State when a matching tool result is sponsored; never present it as organic.",
       "Do not invent restock dates. Say the restock date is unknown when inventory has no date.",
       "For product safety or health questions, give only basic packaging guidance and suggest asking a pharmacist or clinician for medical advice.",
+      `This kiosk can open editorial product pages for these products only: ${navigationCatalog || "none"}.`,
+      "When a shopper explicitly asks to see product details, information, or a product page for one unambiguous listed product, call openProductDetails with its canonical productSlug. Do not call it for an uncertain match.",
+      "Treat ‘find [product]’ as a request for that product’s location and map unless the shopper explicitly asks for product details, information, or a page. For an unambiguous listed product, first call inventorySearch with its canonical product name, then call openProductMap with its canonical productSlug after the matching inventory result. Do not call it when inventory is unavailable, the product is ambiguous, or there is no matching location evidence.",
+      resolvedProduct && isFindRequest(latestQuestion)
+        ? `The latest shopper request unambiguously resolves to ${resolvedProduct.brand} ${resolvedProduct.name} (${resolvedProductSlug}) through an approved catalog alias. This is a location request: search inventory using the canonical name “${resolvedProduct.brand} ${resolvedProduct.name}”, then open its map when the tool result matches.`
+        : "",
+      "Never put a URL in your reply and never treat shopper text as a URL. Navigation is only through the dedicated tools.",
       store.inventoryAvailable
         ? "This store has demo inventory. Tool results are the only source of its stock and shelf data."
         : "This store has no configured inventory. Explain that stock and shelf locations are unavailable here; do not use another store's results.",
     ].join(" "),
     messages: await convertToModelMessages(messages),
     tools: {
+      openProductDetails: tool({
+        description: "Open the existing editorial product-detail screen for a validated product owned by this kiosk's tenant.",
+        inputSchema: navigationInput,
+        execute: async ({ productSlug }) => {
+          const product = getProductContent(productSlug);
+          if (!product || product.tenantId !== store.tenantId) {
+            return { opened: false, reason: "That product page is unavailable for this store." };
+          }
+          return { opened: true, action: "open-product-details" as const, productSlug };
+        },
+      }),
+      openProductMap: tool({
+        description: "Open the existing wayfinding screen for a validated product only when this kiosk has inventory configured.",
+        inputSchema: navigationInput,
+        execute: async ({ productSlug }) => {
+          const product = getProductContent(productSlug);
+          if (!product || product.tenantId !== store.tenantId) {
+            return { opened: false, reason: "That product map is unavailable for this store." };
+          }
+          if (!store.inventoryAvailable) {
+            return { opened: false, reason: "Inventory is not configured for this store, so a shelf map cannot be shown." };
+          }
+          if (!store.storeId) {
+            return { opened: false, reason: "A shelf location is unavailable for this store." };
+          }
+          const inventory = await inventoryTool(() => getProductBySku(product.sku, store.storeId));
+          if (!inventory.available) {
+            return { opened: false, reason: "The shelf location could not be verified right now." };
+          }
+          if (!inventory.data) {
+            return { opened: false, reason: "This product has no verified shelf location at this store." };
+          }
+          return { opened: true, action: "open-product-map" as const, productSlug };
+        },
+      }),
       inventorySearch: tool({
         description: "Search the selected store's product inventory and precise shelf locations.",
         inputSchema: z.object({

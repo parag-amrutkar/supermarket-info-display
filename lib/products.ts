@@ -107,6 +107,8 @@ export type RelatedProduct = {
 /** The written half of a product — stable, authored, not in any database. */
 export type ProductContent = {
   slug: string;
+  /** Terms the shopping assistant can safely resolve to this authored page. */
+  chatAliases?: readonly string[];
   /** Join key into the inventory tables. */
   sku: string;
   /**
@@ -161,6 +163,7 @@ export type Product = ProductContent & InventoryFacts;
 
 const nyquilSevere: ProductContent = {
   slug: "nyquil-severe",
+  chatAliases: ["nyquil", "nyquill", "vicks nyquil"],
   sku: "CVS-9100001",
   tenantId: "cvs-2841",
   category: [
@@ -256,6 +259,7 @@ const nyquilSevere: ProductContent = {
 
 const lumify: ProductContent = {
   slug: "lumify",
+  chatAliases: ["lumify", "lumify eye drops"],
   sku: "CVS-9100002",
   tenantId: "cvs-2841",
   category: [
@@ -432,6 +436,29 @@ const CONTENT: Record<string, ProductContent> = {
 
 export const productSlugs = Object.keys(CONTENT);
 
+/**
+ * Returns the authored catalog record without attempting an inventory lookup.
+ *
+ * Chat navigation uses this rather than `getProduct`: opening editorial
+ * product information must be possible when inventory is offline, while a map
+ * request has a separate inventory-availability check.
+ */
+export function getProductContent(slug: string): ProductContent | undefined {
+  return CONTENT[slug];
+}
+
+/** Canonical slugs that belong to one kiosk tenant. */
+export function getProductSlugsForTenant(tenantId: string): string[] {
+  return productSlugs.filter((slug) => CONTENT[slug].tenantId === tenantId);
+}
+
+/** Authored product names and approved spelling variants for chat routing. */
+export function getProductChatAliases(slug: string): readonly string[] {
+  const product = getProductContent(slug);
+  if (!product) return [];
+  return [...new Set([`${product.brand} ${product.name}`, ...(product.chatAliases ?? [])])];
+}
+
 /** Inventory row → the four fields the screen shows. */
 function factsFromRow(row: PublicInventoryRow): InventoryFacts {
   return {
@@ -457,12 +484,12 @@ function factsFromRow(row: PublicInventoryRow): InventoryFacts {
  * the Supabase client — importing it eagerly would drag that into any module
  * that merely wants a type from this file.
  */
-async function liveFacts(sku: string): Promise<InventoryFacts | null> {
+async function liveFacts(sku: string, storeId?: string): Promise<InventoryFacts | null> {
   if (!isSupabaseConfigured()) return null;
 
   try {
     const { getProductBySku } = await import("@/lib/inventory");
-    const row = await getProductBySku(sku);
+    const row = await getProductBySku(sku, storeId);
     return row ? factsFromRow(row) : null;
   } catch (error) {
     // Falling back keeps the demo on screen, but it means stock and price are
@@ -474,11 +501,25 @@ async function liveFacts(sku: string): Promise<InventoryFacts | null> {
 }
 
 export async function getProduct(slug: string): Promise<Product | undefined> {
-  const content = CONTENT[slug];
+  const content = getProductContent(slug);
   if (!content) return undefined;
 
   const facts = (await liveFacts(content.sku)) ?? content.fallback;
   return { ...content, ...facts };
+}
+
+/**
+ * Product facts backed by a current inventory row, with no editorial fallback.
+ *
+ * Use this for actions that would send a shopper to a shelf. Detail screens can
+ * still render authored product information while inventory is unavailable.
+ */
+export async function getVerifiedProduct(slug: string, storeId?: string): Promise<Product | undefined> {
+  const content = getProductContent(slug);
+  if (!content) return undefined;
+
+  const facts = await liveFacts(content.sku, storeId);
+  return facts ? { ...content, ...facts } : undefined;
 }
 
 /**

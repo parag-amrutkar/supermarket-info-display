@@ -69,3 +69,29 @@ export function isStoredChat(value: unknown): value is UIMessage[] {
     );
   });
 }
+
+export type NavigationCommand = { toolCallId: string; href: string };
+
+/**
+ * Derive a route only from a completed, server-executed navigation result.
+ * Shopper text and restored chat history never supply a destination URL.
+ */
+export function navigationFromMessage(message: UIMessage): NavigationCommand | null {
+  for (const part of message.parts) {
+    if (part.type !== "tool-openProductDetails" && part.type !== "tool-openProductMap") continue;
+    if (part.state !== "output-available" || typeof part.output !== "object" || part.output === null) continue;
+    const output = part.output as { opened?: unknown; action?: unknown; productSlug?: unknown };
+    const expectedAction = part.type === "tool-openProductDetails" ? "open-product-details" : "open-product-map";
+    if (
+      output.opened !== true ||
+      output.action !== expectedAction ||
+      typeof output.productSlug !== "string" ||
+      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(output.productSlug)
+    ) continue;
+    return {
+      toolCallId: part.toolCallId,
+      href: expectedAction === "open-product-details" ? `/product/${output.productSlug}` : `/map/${output.productSlug}`,
+    };
+  }
+  return null;
+}

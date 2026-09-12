@@ -19,6 +19,7 @@ const booleanString = z.enum(["true", "false"]);
 const positiveIntegerString = z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive());
 const nonnegativeIntegerString = z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().nonnegative());
 const priceString = z.string().regex(/^\d+(?:\.\d{1,2})?$/).transform(Number).pipe(z.number().nonnegative());
+const demoProvenanceUrl = (sku) => `urn:beacon-box:demo:${sku}`;
 
 const inventoryRowSchema = z.object({
   store_id: z.string().min(1),
@@ -42,9 +43,17 @@ const inventoryRowSchema = z.object({
   alternative_skus: z.string(),
   sponsored: booleanString,
   source_verified: booleanString,
-  source_url: z.string().url(),
+  source_url: z.string(),
   inventory_data_type: z.enum(["demo_simulated", "live", "estimated"]),
   last_updated: z.string().refine((value) => !Number.isNaN(Date.parse(value)), "Invalid timestamp"),
+}).superRefine((row, context) => {
+  const mayOmitSourceUrl = row.source_verified === "false" && row.inventory_data_type === "demo_simulated";
+  if (!row.source_url && !mayOmitSourceUrl) {
+    context.addIssue({ code: "custom", path: ["source_url"], message: "Source URL is required for verified, live, or estimated inventory." });
+  }
+  if (row.source_url && !z.string().url().safeParse(row.source_url).success) {
+    context.addIssue({ code: "custom", path: ["source_url"], message: "Invalid URL" });
+  }
 });
 
 function parseCsv(input) {
@@ -106,14 +115,21 @@ function validateInventory(csvText) {
       errors.push(`Row ${index + 2}: ${z.prettifyError(result.error)}`);
       return null;
     }
-    return { ...raw, ...result.data };
+    // The database requires a unique, non-null source URL. An unverified demo
+    // row has no external source, so retain that truth in its data flags while
+    // using a stable internal provenance URI for the database identifier.
+    return {
+      ...raw,
+      ...result.data,
+      source_url: result.data.source_url || demoProvenanceUrl(result.data.sku),
+    };
   }).filter(Boolean);
 
   const skuCounts = new Map();
   const urlCounts = new Map();
   for (const row of rows) {
     skuCounts.set(row.sku, (skuCounts.get(row.sku) ?? 0) + 1);
-    urlCounts.set(row.source_url, (urlCounts.get(row.source_url) ?? 0) + 1);
+    if (row.source_url) urlCounts.set(row.source_url, (urlCounts.get(row.source_url) ?? 0) + 1);
   }
   for (const [sku, count] of skuCounts) if (count > 1) errors.push(`Duplicate SKU: ${sku}`);
   for (const [url, count] of urlCounts) if (count > 1) errors.push(`Duplicate source URL: ${url}`);

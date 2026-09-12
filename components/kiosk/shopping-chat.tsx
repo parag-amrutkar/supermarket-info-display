@@ -4,9 +4,10 @@ import * as React from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { LoaderCircle, RotateCcw, Send, Square } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { KioskVoiceInput } from "@/components/kiosk/voice-input";
-import { chatStorageKey, isStoredChat, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH, textFromMessage } from "@/lib/shopping-agent";
+import { chatStorageKey, isStoredChat, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH, navigationFromMessage, textFromMessage } from "@/lib/shopping-agent";
 import type { DemoSession } from "@/lib/demo-auth";
 import type { Tenant } from "@/lib/tenants";
 
@@ -53,6 +54,7 @@ function MessageText({ message }: { message: UIMessage }) {
 }
 
 function Conversation({ tenant, storageKey, onNewConversation }: { tenant: Tenant; storageKey: string; onNewConversation: (oldStorageKey: string) => void }) {
+  const router = useRouter();
   const initialMessages = React.useMemo(() => loadConversation(storageKey), [storageKey]);
   const transport = React.useMemo(
     () => new DefaultChatTransport({
@@ -61,7 +63,22 @@ function Conversation({ tenant, storageKey, onNewConversation }: { tenant: Tenan
     }),
     [tenant.id],
   );
-  const { messages, sendMessage, setMessages, status, error, stop, clearError, regenerate } = useChat({ id: storageKey, messages: initialMessages, transport });
+  const handledNavigationCallIds = React.useRef(new Set<string>());
+  const { messages, sendMessage, setMessages, status, error, stop, clearError, regenerate } = useChat({
+    id: storageKey,
+    messages: initialMessages,
+    transport,
+    onFinish: ({ message, messages: completedMessages, isAbort, isDisconnect, isError }) => {
+      // Persist before a route change unmounts this client component, so browser
+      // Back returns the completed answer instead of a blank conversation.
+      persistConversation(storageKey, completedMessages);
+      if (isAbort || isDisconnect || isError) return;
+      const command = navigationFromMessage(message);
+      if (!command || handledNavigationCallIds.current.has(command.toolCallId)) return;
+      handledNavigationCallIds.current.add(command.toolCallId);
+      router.push(command.href);
+    },
+  });
   const pending = status === "submitted" || status === "streaming";
   const pendingRef = React.useRef(false);
   const historyRef = React.useRef<HTMLDivElement>(null);
