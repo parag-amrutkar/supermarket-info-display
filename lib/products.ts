@@ -1,16 +1,23 @@
 /**
  * Product data for the Beacon Box product detail screen.
  *
- * Shaped around the walk-up question, not around a catalogue record. A shopper
- * who has already decided to buy this needs four things — is this the right
- * box, where is it, is it there, what does it cost. Everything else is a
- * follow-up question, so it lives in `faqs` and renders collapsed.
+ * Split by who owns the truth:
  *
- * Static demo data. Before anything customer-facing, `stock` must come from
- * real inventory (see the "never claim availability" principle in AGENTS.md),
- * `location` from the planogram, `price` from the pricing system, and
- * `dosage`/`activeIngredients`/`warnings` from the current printed label.
+ * - **Inventory owns what changes** — price, size, stock, shelf location. Those
+ *   come from `lib/inventory.ts` (the CVS inventory tables) whenever Supabase is
+ *   configured, keyed by SKU.
+ * - **This file owns what gets written once** — hero photography, the display
+ *   name, the category path, the spoken prompts, and the answer bank the voice
+ *   agent draws on. None of that fits an inventory schema and none of it changes
+ *   hourly.
+ *
+ * When Supabase is not configured the `fallback` facts below are used instead,
+ * so the screen still renders in a bare checkout. Those numbers are invented —
+ * see the note on `Rating` too.
  */
+
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import type { PublicInventoryRow } from "@/lib/supabase/database.types";
 
 /** Shelf-level directions. Aisle alone is not enough — see AGENTS.md. */
 export type ProductLocation = {
@@ -33,10 +40,31 @@ export type Stock = {
 export const LOW_STOCK_AT = 5;
 
 /**
- * Everything below this line — ingredients, dosage, warnings, FAQs, the two
- * related-product lists — is the answer bank, not screen content. The detail
- * screen deliberately renders none of it; it is what the voice agent reaches
- * for when a shopper asks one of `suggestedQuestions`.
+ * Star rating.
+ *
+ * MOCKED. There is no review source in the inventory schema and none wired up,
+ * so these are invented numbers. Do not ship them customer-facing — the "never
+ * claim what the data does not support" rule in AGENTS.md covers social proof
+ * as much as availability.
+ */
+export type Rating = {
+  /** Out of 5. */
+  score: number;
+  count: number;
+};
+
+/** The fields inventory owns. Everything else on a product is editorial. */
+export type InventoryFacts = {
+  size: string;
+  price: string;
+  location: ProductLocation;
+  stock: Stock;
+};
+
+/**
+ * Everything below is the answer bank, not screen content. The detail screen
+ * deliberately renders none of it; it is what the voice agent reaches for when
+ * a shopper taps one of `suggestedQuestions`.
  */
 export type ActiveIngredient = {
   name: string;
@@ -54,8 +82,6 @@ export type FaqItem = {
   answer: string;
 };
 
-/** A card in one of the two rails. `slug` is set only where a detail screen
- *  exists to link to; everything else is display-only for now. */
 export type RelatedProduct = {
   slug?: string;
   brand: string;
@@ -65,58 +91,44 @@ export type RelatedProduct = {
   image?: string;
 };
 
-export type Rating = {
-  /** Out of 5. */
-  score: number;
-  count: number;
-};
-
-export type Product = {
+/** The written half of a product — stable, authored, not in any database. */
+export type ProductContent = {
   slug: string;
+  /** Join key into the inventory tables. */
+  sku: string;
   /**
-   * Category path, broad to narrow. Rendered as a breadcrumb for orientation
-   * only — nothing links yet, since there are no category screens.
+   * Category path, broad to narrow. Richer than inventory, which carries only
+   * `category` and `subcategory`. Orientation only — nothing links yet.
    */
   category: string[];
   brand: string;
+  /** Display name. Inventory's `product_name` is a full shelf label and far too
+   *  long for a heading. */
   name: string;
-  /** Short shelf-facing descriptor, e.g. "Nighttime Liquid". */
   form: string;
-  size: string;
-  price: string;
-  /** Still product shot under `public/`. The looping ad clip is a separate
-   *  screen in the kiosk flow, not this one. */
   image?: string;
-  location: ProductLocation;
-  stock: Stock;
-  rating: Rating;
   /** One line, read at a glance from a few feet back. */
   summary: string;
-  /** Kept short — four chips is the most that reads as a glance, not a list. */
-  relieves: string[];
+  rating: Rating;
+  /** Two words each. At kiosk distance all three read in a single glance, which
+   *  beats teaching exact phrasing — the agent accepts any wording, so a prompt
+   *  only has to advertise the topic. */
+  suggestedQuestions: string[];
   activeIngredients: ActiveIngredient[];
   dosage: DosageRow[];
   warnings: string[];
-  /**
-   * Prompts shown on the screen, phrased as the shopper would say them.
-   *
-   * They are the whole point of the bottom half: this is a voice machine, and
-   * nobody talks to a kiosk unless something tells them they can. Showing five
-   * real questions teaches the interaction far better than a mic icon does —
-   * and answering on demand costs no screen space, which is why the product
-   * rails and the accordion are gone.
-   */
-  suggestedQuestions: string[];
   faqs: FaqItem[];
-  /** Other products in the same line — the "I wanted the daytime one" case. */
   sameLine: RelatedProduct[];
-  /** Different brands that treat the same thing — the "this is too expensive"
-   *  and "they are out" cases. */
   alternatives: RelatedProduct[];
+  /** Used when Supabase is unconfigured or the SKU is missing. Invented. */
+  fallback: InventoryFacts;
 };
 
-const nyquilSevere: Product = {
+export type Product = ProductContent & InventoryFacts;
+
+const nyquilSevere: ProductContent = {
   slug: "nyquil-severe",
+  sku: "CVS-9100001",
   category: [
     "Health & Medicine",
     "Cough, Cold & Flu",
@@ -126,41 +138,25 @@ const nyquilSevere: Product = {
   brand: "Vicks",
   name: "NyQuil SEVERE",
   form: "Cold & Flu Nighttime Liquid",
-  size: "12 FL OZ · Berry",
-  price: "$13.49",
   image: "/nyquil-severe-hero.jpg",
-  location: {
-    aisle: "Aisle 7",
-    rack: "Rack 3",
-    shelf: "Second shelf",
-    section: "Cold & Flu",
-  },
-  stock: { status: "in", count: 8 },
-  rating: { score: 4.6, count: 1248 },
   summary:
     "Nighttime relief for the worst of a cold or flu — including a blocked nose.",
-  relieves: ["Cough", "Congestion", "Aches & fever", "Sore throat"],
+  rating: { score: 4.6, count: 1248 },
+  suggestedQuestions: [
+    // "Versions" rather than "sizes": NyQuil varies by formula and form
+    // (DayQuil, LiquiCaps, non-severe), not by bottle size.
+    "Other versions?",
+    // Deliberately not "Cheaper?". This screen is expected to carry brand-funded
+    // content, and a prompt that steers off the sponsored product is a hard sell
+    // to the brand paying for it. Neutral prompt, honest answer.
+    "Other brands?",
+    "Product questions?",
+  ],
   activeIngredients: [
-    {
-      name: "Acetaminophen",
-      amount: "650 mg",
-      purpose: "Pain reliever & fever reducer",
-    },
-    {
-      name: "Dextromethorphan HBr",
-      amount: "20 mg",
-      purpose: "Cough suppressant",
-    },
-    {
-      name: "Doxylamine succinate",
-      amount: "12.5 mg",
-      purpose: "Antihistamine",
-    },
-    {
-      name: "Phenylephrine HCl",
-      amount: "10 mg",
-      purpose: "Nasal decongestant",
-    },
+    { name: "Acetaminophen", amount: "650 mg", purpose: "Pain reliever & fever reducer" },
+    { name: "Dextromethorphan HBr", amount: "20 mg", purpose: "Cough suppressant" },
+    { name: "Doxylamine succinate", amount: "12.5 mg", purpose: "Antihistamine" },
+    { name: "Phenylephrine HCl", amount: "10 mg", purpose: "Nasal decongestant" },
   ],
   dosage: [
     {
@@ -168,10 +164,7 @@ const nyquilSevere: Product = {
       instruction:
         "30 mL (2 tablespoons) every 6 hours. No more than 4 doses in 24 hours.",
     },
-    {
-      group: "Children under 12",
-      instruction: "Do not use.",
-    },
+    { group: "Children under 12", instruction: "Do not use." },
   ],
   warnings: [
     "Contains acetaminophen. Severe liver damage may occur if you exceed 4 doses in 24 hours, combine it with another acetaminophen product, or have 3 or more alcoholic drinks a day.",
@@ -179,25 +172,6 @@ const nyquilSevere: Product = {
     "Do not use with an MAOI, or within 2 weeks of stopping one.",
     "Ask a doctor first with heart disease, high blood pressure, thyroid disease, diabetes, glaucoma, a chronic cough, or an enlarged prostate.",
     "Stop and see a doctor if symptoms last more than 7 days or a fever lasts more than 3 days.",
-  ],
-  suggestedQuestions: [
-    // One prompt per bucket: same line, other brands, everything else.
-    //
-    // Two words, not sentences. At kiosk distance all three read in a single
-    // glance, which beats teaching the exact phrasing — the agent accepts any
-    // wording, so the prompts only have to advertise the topic.
-    //
-    // "Versions" rather than "sizes": NyQuil varies by formula and form
-    // (DayQuil, LiquiCaps, non-severe), not by bottle size. Sizes is the right
-    // axis for something like Lumify, and belongs in that product's data.
-    "Other versions?",
-    // Deliberately not "Cheaper?". The same screen is expected to carry
-    // brand-funded content, and a prompt that steers off the sponsored product
-    // is a hard sell to the brand paying for it. Neutral prompt, honest answer:
-    // a shopper who asks about price still gets the comparison and the tradeoff.
-    "Other brands?",
-    // Catch-all for the label — dosage, drowsiness, interactions, warnings.
-    "Product questions?",
   ],
   faqs: [
     {
@@ -227,61 +201,164 @@ const nyquilSevere: Product = {
     },
   ],
   sameLine: [
-    {
-      brand: "Vicks",
-      name: "DayQuil SEVERE Cold & Flu",
-      price: "$13.49",
-      stock: { status: "in", count: 22 },
-    },
-    {
-      brand: "Vicks",
-      name: "NyQuil SEVERE LiquiCaps",
-      price: "$14.99",
-      stock: { status: "in", count: 4 },
-    },
-    {
-      brand: "Vicks",
-      name: "NyQuil Cold & Flu Liquid",
-      price: "$12.49",
-      stock: { status: "in", count: 16 },
-    },
-    {
-      brand: "Vicks",
-      name: "VapoRub Topical Ointment",
-      price: "$8.99",
-      stock: { status: "in", count: 31 },
-    },
+    { brand: "Vicks", name: "DayQuil SEVERE Cold & Flu", price: "$13.49", stock: { status: "in", count: 22 } },
+    { brand: "Vicks", name: "NyQuil SEVERE LiquiCaps", price: "$14.99", stock: { status: "in", count: 4 } },
+    { brand: "Vicks", name: "NyQuil Cold & Flu Liquid", price: "$12.49", stock: { status: "in", count: 16 } },
   ],
   alternatives: [
+    { brand: "Robitussin", name: "Severe Cough + Sore Throat", price: "$12.99", stock: { status: "in", count: 11 } },
+    { brand: "Robitussin", name: "Maximum Strength Nighttime Cough DM", price: "$10.49", stock: { status: "in", count: 4 } },
+  ],
+  fallback: {
+    size: "12 FL OZ · Berry",
+    price: "$13.49",
+    location: { aisle: "Aisle 17", rack: "Rack 1", shelf: "Shelf 1", section: "Cough Medicine" },
+    stock: { status: "in", count: 8 },
+  },
+};
+
+const lumify: ProductContent = {
+  slug: "lumify",
+  sku: "CVS-9100002",
+  category: [
+    "Health & Medicine",
+    "Eye Care",
+    "Eye Drops",
+    "Redness Relief",
+  ],
+  brand: "Lumify",
+  name: "Redness Reliever",
+  form: "Brimonidine Eye Drops",
+  image: "/lumify-hero.jpg",
+  summary:
+    "Takes the red out in about a minute, and holds it for up to eight hours.",
+  rating: { score: 4.7, count: 3412 },
+  suggestedQuestions: [
+    // Sizes, not versions: Lumify is one formula in two bottles, so the bottle
+    // is the actual decision a shopper makes here.
+    "Other sizes?",
+    "Other brands?",
+    "Product questions?",
+  ],
+  activeIngredients: [
     {
-      brand: "Theraflu",
-      name: "Severe Cold Nighttime Powder",
-      price: "$11.99",
-      stock: { status: "in", count: 12 },
-    },
-    {
-      brand: "Robitussin",
-      name: "Nighttime Multi-Symptom",
-      price: "$10.49",
-      stock: { status: "in", count: 2 },
-    },
-    {
-      brand: "Store brand",
-      name: "Nighttime Cold & Flu Relief",
-      price: "$6.99",
-      stock: { status: "in", count: 40 },
+      name: "Brimonidine tartrate",
+      amount: "0.025%",
+      purpose: "Redness reliever",
     },
   ],
+  dosage: [
+    {
+      group: "Adults & children 5+",
+      instruction:
+        "1 drop in the affected eye(s) every 6 to 8 hours, no more than 4 times a day.",
+    },
+    { group: "Children under 5", instruction: "Ask a doctor." },
+  ],
+  warnings: [
+    "Remove contact lenses before use and wait 10 minutes before putting them back in — the preservative can soak into soft lenses.",
+    "Ask a doctor first if you have glaucoma, heart disease, high blood pressure, or are taking a prescription eye drop.",
+    "Overuse of redness drops in general can make redness worse; stop and see a doctor if yours lasts more than 72 hours.",
+    "Stop and see a doctor if you have eye pain, changes in vision, or continued redness or irritation.",
+    "Do not use if the solution changes colour or becomes cloudy.",
+  ],
+  faqs: [
+    {
+      question: "How quickly does it work?",
+      answer:
+        "About a minute, and the effect lasts up to eight hours. You will see it in a mirror before you leave the aisle.",
+    },
+    {
+      question: "Is it safe to use every day?",
+      answer:
+        "Within the label, yes — one drop every six to eight hours, up to four times a day. If your eyes are still red after three days, that is worth asking a pharmacist about rather than using more.",
+    },
+    {
+      question: "Does it sting?",
+      answer:
+        "Most people feel nothing. Mild stinging or dryness are the common complaints and both are usually brief.",
+    },
+    {
+      question: "What makes it different from other redness drops?",
+      answer:
+        "The active ingredient. Older redness drops constrict the arteries feeding the eye, which works but tends to rebound — the redness returns worse once the drop wears off. Lumify uses brimonidine, which targets the veins instead, and rebound redness has not shown up in its studies.",
+    },
+    {
+      question: "How long does a bottle last?",
+      answer:
+        "The 7.5 mL bottle holds roughly 150 drops — about five weeks at one drop in each eye, twice a day.",
+    },
+  ],
+  sameLine: [
+    { brand: "Lumify", name: "Redness Reliever, 2.5 mL", price: "$13.99", stock: { status: "in", count: 9 } },
+    { brand: "Lumify", name: "Eye Illuminations Hydra-Gel Drops", price: "$16.99", stock: { status: "in", count: 6 } },
+  ],
+  alternatives: [
+    { brand: "Blink", name: "Boost Dry Eye Lubricating Drops", price: "$2.49", stock: { status: "in", count: 5 } },
+    { brand: "Systane", name: "Ultra Lubricant Eye Drops", price: "$14.49", stock: { status: "in", count: 18 } },
+  ],
+  fallback: {
+    size: "7.5 mL",
+    price: "$22.99",
+    location: { aisle: "Aisle 18", rack: "Rack 1", shelf: "Shelf 1", section: "Eye Drops" },
+    stock: { status: "in", count: 3 },
+  },
 };
 
-const PRODUCTS: Record<string, Product> = {
+const CONTENT: Record<string, ProductContent> = {
   [nyquilSevere.slug]: nyquilSevere,
+  [lumify.slug]: lumify,
 };
 
-export const productSlugs = Object.keys(PRODUCTS);
+export const productSlugs = Object.keys(CONTENT);
 
-export function getProduct(slug: string): Product | undefined {
-  return PRODUCTS[slug];
+/** Inventory row → the four fields the screen shows. */
+function factsFromRow(row: PublicInventoryRow): InventoryFacts {
+  return {
+    size: row.size ?? "",
+    price: `$${row.price_usd.toFixed(2)}`,
+    location: {
+      aisle: `Aisle ${row.aisle}`,
+      rack: `Rack ${row.rack}`,
+      shelf: `Shelf ${row.shelf_level}`,
+      section: row.section,
+    },
+    stock:
+      row.inventory_status === "out_of_stock"
+        ? { status: "out" }
+        : { status: "in", count: row.quantity_on_hand },
+  };
+}
+
+/**
+ * Live facts for a SKU, or null to fall back.
+ *
+ * `lib/inventory.ts` is imported lazily because it is `server-only` and pulls in
+ * the Supabase client — importing it eagerly would drag that into any module
+ * that merely wants a type from this file.
+ */
+async function liveFacts(sku: string): Promise<InventoryFacts | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const { getProductBySku } = await import("@/lib/inventory");
+    const row = await getProductBySku(sku);
+    return row ? factsFromRow(row) : null;
+  } catch (error) {
+    // Falling back keeps the demo on screen, but it means stock and price are
+    // invented while Supabase is configured and believed to be live — so this
+    // must be loud in the server log rather than swallowed.
+    console.error(`[products] inventory lookup failed for ${sku}:`, error);
+    return null;
+  }
+}
+
+export async function getProduct(slug: string): Promise<Product | undefined> {
+  const content = CONTENT[slug];
+  if (!content) return undefined;
+
+  const facts = (await liveFacts(content.sku)) ?? content.fallback;
+  return { ...content, ...facts };
 }
 
 /**

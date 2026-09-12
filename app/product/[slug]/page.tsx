@@ -3,19 +3,25 @@ import { notFound } from "next/navigation";
 
 import { PanelFrame } from "@/components/kiosk/panel-frame";
 import { ProductScreen } from "@/components/kiosk/product-screen";
-import { getProduct, productSlugs } from "@/lib/products";
+import { getProduct } from "@/lib/products";
 
 type ProductPageProps = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return productSlugs.map((slug) => ({ slug }));
-}
+/**
+ * Never prerendered.
+ *
+ * Stock and price come from inventory, and a count baked at build time is
+ * exactly the "claiming availability the data does not support" failure that
+ * AGENTS.md warns about. Being dynamic also keeps the build independent of
+ * Supabase being reachable, the way `api/models` is not.
+ */
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProduct(slug);
+  const product = await getProduct(slug);
 
   return {
     title: product
@@ -26,7 +32,7 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = getProduct(slug);
+  const product = await getProduct(slug);
 
   if (!product) {
     notFound();
