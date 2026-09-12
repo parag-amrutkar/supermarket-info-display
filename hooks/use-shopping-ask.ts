@@ -7,8 +7,11 @@ import { useRouter } from "next/navigation";
 
 import { useVoiceInput } from "@/hooks/use-voice-input";
 import {
+  type ChoiceOffer,
+  choicesFromMessage,
   MAX_CHAT_TEXT_LENGTH,
   navigationFromMessage,
+  type ProductChoice,
   textFromMessage,
   toSafeMessages,
 } from "@/lib/shopping-agent";
@@ -31,6 +34,14 @@ import {
  * instead, which is what keeps "we could not verify a shelf location" from
  * turning into a walk to the wrong aisle.
  *
+ * A question that matches a kind of product rather than one — "cold medicine",
+ * "eye drops" — comes back with a list attached instead of a destination. That
+ * list is built by a third server tool, `offerProductChoices`, which re-reads
+ * every SKU out of inventory before it will put a price or an aisle on a button;
+ * `choicesFromMessage` turns only its completed result into tap targets. A
+ * product with an editorial screen behind it opens that screen, and the rest of
+ * the store's inventory becomes a follow-up question — see `chooseProduct`.
+ *
  * The conversation is held in memory only. Neither screen has history UI, and
  * any navigation unmounts the caller — so the next shopper walks up to a fresh
  * panel with no stored transcript to clear.
@@ -52,6 +63,11 @@ const FADE_MS = 500;
  *  read a paragraph aloud twice. */
 const ANSWER_HOLD_MS = 45_000;
 
+/** Longer when the answer is a list of products. Four names, prices and aisles
+ *  take longer to scan than a sentence takes to read, and a panel that clears
+ *  itself from under a shopper mid-decision is worse than one that waits. */
+const CHOICE_HOLD_MS = 75_000;
+
 /** Shown when the agent finishes with neither a destination nor a sentence.
  *  Never a stock or location claim — this is the case where we know nothing. */
 export const NO_ANSWER =
@@ -61,7 +77,16 @@ export const NO_ANSWER =
 export type Ask =
   | { phase: "idle" }
   | { phase: "asking"; question: string }
-  | { phase: "answered"; question: string; answer: string };
+  | {
+      phase: "answered";
+      question: string;
+      answer: string;
+      /**
+       * The products this answer put on the glass as buttons, when the question
+       * matched several rather than one. Null for an ordinary spoken answer.
+       */
+      offer: ChoiceOffer | null;
+    };
 
 export type ShoppingAsk = ReturnType<typeof useShoppingAsk>;
 
@@ -135,12 +160,17 @@ export function useShoppingAsk({
         router.push(command.href);
         return;
       }
+      const offer = choicesFromMessage(message);
       setAsk((current) =>
         current.phase === "asking"
           ? {
               phase: "answered",
               question: current.question,
-              answer: textFromMessage(message) || NO_ANSWER,
+              // A list of buttons is an answer on its own, so a silent model
+              // does not get the "I could not find that" line over the top of
+              // four products the shopper can see.
+              answer: textFromMessage(message) || (offer ? "" : NO_ANSWER),
+              offer,
             }
           : current,
       );
@@ -176,7 +206,7 @@ export function useShoppingAsk({
 
   React.useEffect(() => {
     if (ask.phase !== "answered") return;
-    const clear = setTimeout(() => setAsk({ phase: "idle" }), ANSWER_HOLD_MS);
+    const clear = setTimeout(() => setAsk({ phase: "idle" }), ask.offer ? CHOICE_HOLD_MS : ANSWER_HOLD_MS);
     return () => clearTimeout(clear);
   }, [ask]);
 
@@ -204,6 +234,29 @@ export function useShoppingAsk({
     void regenerate();
   }, [ask, clearError, regenerate]);
 
+  /**
+   * A tap on one of the offered products.
+   *
+   * Two outcomes, decided by the server when it built the list: a product with
+   * an editorial screen opens it, and everything else the store stocks becomes
+   * the follow-up question the shopper was about to ask anyway. Nothing on that
+   * list is a dead button, and nothing invents a page that was never written.
+   */
+  const chooseProduct = React.useCallback(
+    (choice: ProductChoice) => {
+      if (chatPending) return;
+      if (choice.productSlug) {
+        router.push(`/product/${choice.productSlug}`);
+        return;
+      }
+      const question = `Where can I find ${choice.label}?`;
+      clearError();
+      setAsk({ phase: "asking", question });
+      void sendMessage({ text: question.slice(0, MAX_CHAT_TEXT_LENGTH) });
+    },
+    [chatPending, clearError, router, sendMessage],
+  );
+
   const micMessage = recording
     ? `Listening · ${elapsedSeconds} / ${maxRecordingSeconds} seconds`
     : status === "requesting-permission"
@@ -227,5 +280,6 @@ export function useShoppingAsk({
     stopListening,
     dismissAnswer,
     retryAnswer,
+    chooseProduct,
   };
 }

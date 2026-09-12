@@ -3,6 +3,9 @@ import type { UIMessage } from "ai";
 export const SHOPPING_CHAT_STORAGE_PREFIX = "beacon-box:shopping-chat:v1";
 export const MAX_CHAT_MESSAGES = 16;
 export const MAX_CHAT_TEXT_LENGTH = 800;
+/** Products one answer may offer as buttons. Four fit the panel without a
+ *  scroll, and a list longer than that stops being a glance. */
+export const MAX_PRODUCT_CHOICES = 4;
 
 export type ShoppingTenantId = "cvs-2841" | "sunrise-deli";
 
@@ -110,6 +113,64 @@ export function navigationFromMessage(message: UIMessage): NavigationCommand | n
       toolCallId: part.toolCallId,
       href: expectedAction === "open-product-details" ? `/product/${output.productSlug}` : `/map/${output.productSlug}`,
     };
+  }
+  return null;
+}
+
+/** One tappable product in an answer. */
+export type ProductChoice = {
+  sku: string;
+  label: string;
+  /** Price, size, stock when it matters, and the aisle. Inventory's words. */
+  detail: string;
+  sponsored: boolean;
+  /**
+   * Set only for a product with an editorial screen behind it, which in this
+   * demo catalog means NyQuil SEVERE and Lumify. Everything else the store
+   * stocks is an inventory row and nothing more: tapping it asks the assistant
+   * where it is rather than opening a page that was never written.
+   */
+  productSlug?: string;
+};
+
+export type ChoiceOffer = { toolCallId: string; demo: boolean; choices: ProductChoice[] };
+
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function isProductChoice(value: unknown): value is ProductChoice {
+  if (typeof value !== "object" || value === null) return false;
+  const choice = value as Record<string, unknown>;
+  return (
+    typeof choice.sku === "string" && choice.sku.length > 0 && choice.sku.length <= 80 &&
+    typeof choice.label === "string" && choice.label.trim().length > 0 && choice.label.length <= 120 &&
+    typeof choice.detail === "string" && choice.detail.length <= 120 &&
+    typeof choice.sponsored === "boolean" &&
+    (choice.productSlug === undefined || (typeof choice.productSlug === "string" && SLUG_PATTERN.test(choice.productSlug)))
+  );
+}
+
+/**
+ * Read a list of tappable products out of a finished answer.
+ *
+ * Held to the same rule as `navigationFromMessage`: a button only exists
+ * because a server-executed tool produced it. Every label, price and aisle on
+ * one was read back out of inventory inside `offerProductChoices`, so a model
+ * that merely writes product names in its reply puts nothing on the glass.
+ *
+ * `toSafeMessages` strips tool parts before any request, so an offer lives for
+ * exactly as long as the answer that carries it — restored history can never
+ * put a stale price on a button.
+ */
+export function choicesFromMessage(message: UIMessage): ChoiceOffer | null {
+  for (const part of message.parts) {
+    if (part.type !== "tool-offerProductChoices") continue;
+    if (part.state !== "output-available" || typeof part.output !== "object" || part.output === null) continue;
+    const output = part.output as { offered?: unknown; action?: unknown; demo?: unknown; choices?: unknown };
+    if (output.offered !== true || output.action !== "offer-product-choices") continue;
+    if (!Array.isArray(output.choices)) continue;
+    const choices = output.choices.filter(isProductChoice).slice(0, MAX_PRODUCT_CHOICES);
+    if (choices.length < 2) continue;
+    return { toolCallId: part.toolCallId, demo: output.demo === true, choices };
   }
   return null;
 }

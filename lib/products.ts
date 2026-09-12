@@ -452,6 +452,20 @@ export function getProductSlugsForTenant(tenantId: string): string[] {
   return productSlugs.filter((slug) => CONTENT[slug].tenantId === tenantId);
 }
 
+/**
+ * The authored screen behind an inventory SKU, when there is one.
+ *
+ * Most of the store is inventory rows and nothing else: the kiosk can say which
+ * aisle a Systane bottle is in, but it has no written-up screen to open for it.
+ * Only a product in this file has one — which is what decides whether a tap on
+ * a suggested product opens a page or asks the assistant a question instead.
+ */
+export function getProductSlugBySku(sku: string, tenantId?: string): string | undefined {
+  return productSlugs.find(
+    (slug) => CONTENT[slug].sku === sku && (tenantId === undefined || CONTENT[slug].tenantId === tenantId),
+  );
+}
+
 /** Authored product names and approved spelling variants for chat routing. */
 export function getProductChatAliases(slug: string): readonly string[] {
   const product = getProductContent(slug);

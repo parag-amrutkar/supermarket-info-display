@@ -7,8 +7,16 @@ import {
 import { z } from "zod";
 import { getModel, InvalidModelIdError, providerOptions } from "@/lib/ai";
 import { getAisleInventory, getProductBySku, searchProducts } from "@/lib/inventory";
-import { getProductChatAliases, getProductContent, getProductSlugsForTenant, productAnswerBank } from "@/lib/products";
-import { getStoreContext, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH } from "@/lib/shopping-agent";
+import {
+  getProductChatAliases,
+  getProductContent,
+  getProductSlugBySku,
+  getProductSlugsForTenant,
+  type ProductContent,
+  productAnswerBank,
+} from "@/lib/products";
+import { getStoreContext, MAX_CHAT_MESSAGES, MAX_CHAT_TEXT_LENGTH, MAX_PRODUCT_CHOICES } from "@/lib/shopping-agent";
+import type { PublicInventoryRow } from "@/lib/supabase/database.types";
 
 // Streaming responses can run longer than the default serverless budget.
 export const maxDuration = 30;
@@ -60,6 +68,41 @@ function resolveAuthoredProduct(question: string, slugs: readonly string[]) {
 function isFindRequest(question: string) {
   return !/\b(details?|information|info|product page|page)\b/i.test(question)
     && /\b(find|where|location|map|directions|guide)\b/i.test(question);
+}
+
+/**
+ * A tap target's label, not a shelf label.
+ *
+ * `product_name` is the full packaging string — "Robitussin Adult Maximum
+ * Strength Severe Cough + Sore Throat Relief Medicine, 8 FL OZ" — which is
+ * unreadable at a glance on a button. An authored product already has a display
+ * name written for a heading; everything else loses the trailing size, which the
+ * line underneath carries anyway.
+ */
+function choiceLabel(row: PublicInventoryRow, content?: ProductContent) {
+  if (content) return `${content.brand} ${content.name}`;
+  const name = row.product_name.trim();
+  const size = row.size?.trim();
+  const trimmed = size && name.toLowerCase().endsWith(size.toLowerCase())
+    ? name.slice(0, name.length - size.length).replace(/[\s,]+$/, "")
+    : name;
+  return trimmed.length > 64 ? `${trimmed.slice(0, 63).trimEnd()}…` : trimmed;
+}
+
+/**
+ * The second line of a choice: price, size, and where it is.
+ *
+ * Stock is named only when it changes what the shopper does — out, or down to
+ * the last few. A healthy shelf says nothing, the same judgement `stockLabel`
+ * makes on the product screen.
+ */
+function choiceDetail(row: PublicInventoryRow) {
+  const parts = [`$${row.price_usd.toFixed(2)}`];
+  if (row.size) parts.push(row.size);
+  if (row.inventory_status === "out_of_stock") parts.push("Out of stock");
+  else if (row.inventory_status === "low_stock") parts.push(`Only ${row.quantity_on_hand} left`);
+  parts.push(`Aisle ${row.aisle}`);
+  return parts.join(" · ");
 }
 
 async function inventoryTool<T>(work: () => Promise<T>) {
@@ -139,6 +182,10 @@ export async function POST(req: Request) {
       `This kiosk can open editorial product pages for these products only: ${navigationCatalog || "none"}.`,
       "When a shopper asks about one unambiguous listed product without asking where it is, call openProductDetails with its canonical productSlug so the kiosk opens that product’s screen, and keep your reply to one short sentence. Naming a product is enough — they do not have to say ‘details’ or ‘page’. Do not call it for an uncertain match, and do not call it for the product whose screen the shopper is already on.",
       "Treat ‘find [product]’ as a request for that product’s location and map. For an unambiguous listed product, first call inventorySearch with its canonical product name, then call openProductMap with its canonical productSlug after the matching inventory result. Do not call it when inventory is unavailable, the product is ambiguous, or there is no matching location evidence.",
+      `When a shopper asks for a kind of product rather than one product — “cold medicine”, “eye drops”, “something for a blocked nose” — call inventorySearch first, then offerProductChoices with skus taken from that result, so the kiosk shows them as buttons the shopper can tap. Offer ${MAX_PRODUCT_CHOICES} whenever the search returned that many, and put the products with an editorial screen first when it returned them. Prefer formulations that match what was asked for. Then reply with one short sentence introducing the list and do not name the products again in your text — the buttons already show the name, price, and aisle of each.`,
+      "A question about a kind of product is answered with that list, not by opening one product's screen — a shopper who asked what the store carries is choosing, and picking for them is the wrong answer even when one of the options has a screen behind it.",
+      "Inventory search matches words, so a category term can come back with almost nothing. Fewer than two results is a reason to search again with a broader word — the symptom, the shelf section, the plain name of the thing — before settling for a single product.",
+      "Never pass a sku to offerProductChoices that did not come back from an inventory tool in this conversation.",
       resolvedProduct && navigableResolvedSlug
         ? isFindRequest(latestQuestion)
           ? `The latest shopper request unambiguously resolves to ${resolvedProduct.brand} ${resolvedProduct.name} (${navigableResolvedSlug}) through an approved catalog alias. This is a location request: search inventory using the canonical name “${resolvedProduct.brand} ${resolvedProduct.name}”, then open its map when the tool result matches.`
@@ -200,6 +247,55 @@ export async function POST(req: Request) {
           return { opened: true, action: "open-product-map" as const, productSlug };
         },
       }),
+      offerProductChoices: tool({
+        description:
+          "Offer the shopper a short list of tappable products for a question that matches several of them rather than one. Pass skus returned by an inventory tool in this conversation.",
+        inputSchema: z.object({
+          skus: z
+            .array(z.string().trim().min(1).max(80))
+            .min(2)
+            .max(MAX_PRODUCT_CHOICES)
+            .describe("SKUs from an inventory result, best match first"),
+        }),
+        execute: async ({ skus }) => {
+          if (!store.inventoryAvailable || !store.storeId) {
+            return { offered: false, reason: "Inventory is not configured for this store, so a product list cannot be shown." };
+          }
+          // Re-read every sku here rather than trusting the ones the model
+          // echoed back: a button carries a price, a stock state and an aisle,
+          // which are exactly the claims that may only come from inventory.
+          const lookup = await inventoryTool(() =>
+            Promise.all([...new Set(skus)].slice(0, MAX_PRODUCT_CHOICES).map((sku) => getProductBySku(sku, store.storeId))),
+          );
+          if (!lookup.available || !lookup.data) {
+            return { offered: false, reason: "The product list could not be verified right now." };
+          }
+          const rows = lookup.data.filter((row): row is PublicInventoryRow => row !== null);
+          const choices = rows.map((row) => {
+            const slug = getProductSlugBySku(row.sku, store.tenantId);
+            return {
+              sku: row.sku,
+              label: choiceLabel(row, slug ? getProductContent(slug) : undefined),
+              detail: choiceDetail(row),
+              sponsored: row.sponsored,
+              // Only a product written up in lib/products.ts has a screen to
+              // open. The rest are still tappable — the kiosk turns those into a
+              // follow-up question instead of a dead button — so the slug is
+              // simply left off, including for the screen already showing.
+              ...(slug && slug !== currentSlug ? { productSlug: slug } : {}),
+            };
+          });
+          if (choices.length < 2) {
+            return { offered: false, reason: "Those SKUs are not in this store's inventory. Answer in words instead." };
+          }
+          return {
+            offered: true,
+            action: "offer-product-choices" as const,
+            demo: rows.some((row) => row.inventory_data_type === "demo_simulated"),
+            choices,
+          };
+        },
+      }),
       inventorySearch: tool({
         description: "Search the selected store's product inventory and precise shelf locations.",
         inputSchema: z.object({
@@ -228,7 +324,11 @@ export async function POST(req: Request) {
         },
       }),
     },
-    stopWhen: stepCountIs(3),
+    // A category question is the long path: search, search again when the first
+    // term came back thin, offer the buttons, then write the sentence that
+    // introduces them. Four steps of work, so the ceiling sits one above it —
+    // land exactly on the ceiling and the answer is what gets cut.
+    stopWhen: stepCountIs(5),
     // Reasoning tokens are spent from this same budget, so 300 — enough for the
     // two or three sentences a kiosk answer should be — was being consumed by
     // thinking alone, and the shopper got `finishReason: "length"` with an
