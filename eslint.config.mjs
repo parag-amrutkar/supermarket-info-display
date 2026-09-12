@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Not app code: vendored agent skills hydrated from skills-lock.json, and
+    // the HyperFrames composition projects. Both are gitignored or self-
+    // contained, and flat config does not consult .gitignore.
+    ".agents/**",
+    ".claude/**",
+    "videos/**",
   ]),
 ]);
 

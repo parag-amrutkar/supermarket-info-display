@@ -45,3 +45,9 @@ next-env.d.ts
 # run: npx skills add heygen-com/hyperframes --full-depth
 /.agents
 /.claude/skills
+
+# HyperFrames composition projects: source is committed, output is not
+videos/*/renders/
+videos/*/snapshots/
+videos/*/node_modules/
+videos/*/.hyperframes/

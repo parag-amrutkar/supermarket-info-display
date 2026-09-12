@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Image as ImageIcon, LogOut, Tag } from "lucide-react";
+import { CalendarDays, LogOut, Navigation, Tag } from "lucide-react";
 import { cn } from "cn";
 
 import { BeaconMark } from "@/components/kiosk/beacon-mark";
@@ -41,32 +41,51 @@ function Clock() {
   );
 }
 
-/** An unfilled content region. Explicitly labelled as empty rather than faked
- *  with stock imagery, so the demo does not imply content that does not exist. */
+/** A content region. Unfilled slots are explicitly labelled as empty rather
+ *  than faked with stock imagery, so the demo does not imply content that does
+ *  not exist. Pass `onPress` and the slot becomes a real tap target — rendered
+ *  as a button rather than a div, so it is reachable and announced as one. */
 function ContentSlot({
   icon: Icon,
   label,
   hint,
   className,
+  onPress,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   hint: string;
   className?: string;
+  onPress?: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center gap-[1.5cqw] rounded-2xl p-[3cqw] text-center",
-        // `ring-dashed` does not exist — rings are box-shadows and cannot dash.
-        "border-2 border-dashed border-foreground/20 bg-card/60",
-        className,
-      )}
-    >
+  const body = (
+    <>
       <Icon className="size-[6cqw] text-brand" />
       <span className="text-[2.4cqw] font-medium">{label}</span>
       <span className="text-[1.9cqw] text-muted-foreground">{hint}</span>
-    </div>
+    </>
+  );
+  const shell = cn(
+    "flex flex-col items-center justify-center gap-[1.5cqw] rounded-2xl p-[3cqw] text-center",
+    // `ring-dashed` does not exist — rings are box-shadows and cannot dash.
+    "border-2 border-dashed border-foreground/20 bg-card/60",
+    className,
+  );
+
+  if (!onPress) return <div className={shell}>{body}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={cn(
+        shell,
+        "border-solid border-brand/40 transition-colors outline-none",
+        "hover:bg-card focus-visible:ring-4 focus-visible:ring-brand/60",
+      )}
+    >
+      {body}
+    </button>
   );
 }
 
@@ -74,10 +93,12 @@ export function TenantDisplay({
   tenant,
   session,
   onSignOut,
+  onOpenWayfinding,
 }: {
   tenant: Tenant;
   session: DemoSession;
   onSignOut: () => void;
+  onOpenWayfinding: () => void;
 }) {
   const signedInAt = new Date(session.signedInAt).toLocaleTimeString([], {
     hour: "numeric",
@@ -121,10 +142,11 @@ export function TenantDisplay({
         </p>
 
         <ContentSlot
-          icon={ImageIcon}
-          label="Featured content"
-          hint="No content scheduled for this slot"
+          icon={Navigation}
+          label="Find a product"
+          hint="Route to NyQuil Severe — Aisle 7"
           className="min-h-0 flex-1"
+          onPress={onOpenWayfinding}
         />
         <div className="grid shrink-0 grid-cols-2 gap-[3cqw]">
           <ContentSlot

@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px;
+        overflow: hidden; background: #F7F6F5;
+      }
+      body { font-family: "Outfit", sans-serif; color: #1A1514; }
+
+      /* Palette — declared once, used everywhere.
+         bg #F7F6F5 warm off-white · fg #1A1514 warm near-black
+         accent #CC0000 CVS red (lib/tenants.ts cvs-2841 brand base)
+         Neutrals are tinted warm toward the accent hue; dead grey reads as undesigned. */
+      :root {
+        --bg: #F7F6F5;
+        --fg: #1A1514;
+        --muted: #6B625E;
+        --accent: #CC0000;
+        --accent-deep: #8F0F0F;
+        --panel: #FFFFFF;
+        --shelf: #E4E1DF;
+        --shelf-line: #C9C2BE;
+      }
+
+      /* Untimed root children get NO automatic layout from the runtime — only
+         children carrying data-start are positioned and sized. Every layer here
+         is untimed on purpose, so each must size itself or it collapses to 0px
+         and anything tweened on it paints nothing. */
+      .layer { position: absolute; inset: 0; }
+
+      .mono { font-family: "JetBrains Mono", monospace; }
+
+      /* ---------- shared chrome ---------- */
+      .band {
+        position: absolute; left: 0; right: 0;
+        background: var(--accent); color: #fff;
+        display: flex; align-items: center; gap: 28px;
+        padding: 0 56px;
+      }
+      .band-title {
+        font-size: 52px; font-weight: 800; letter-spacing: 0.02em;
+        line-height: 1; text-transform: uppercase;
+      }
+      .band-sub { font-size: 28px; font-weight: 400; opacity: 0.88; line-height: 1; }
+      .band-meta { font-size: 22px; opacity: 0.95; letter-spacing: 0.08em; }
+
+      .eyebrow {
+        font-size: 24px; letter-spacing: 0.22em; text-transform: uppercase;
+        color: var(--accent); font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12.4"
+      data-fps="30"
+      data-width="1080"
+      data-height="1920"
+      style="position: relative; width: 1080px; height: 1920px; overflow: hidden"
+    >
+      <!-- ============================================================
+           GROUND. Not a clip, never hidden. The full-frame fill lives
+           here rather than on #root: the compositing path can drop the
+           root element's own background and render the frame black.
+           ============================================================ -->
+      <div id="bg" class="layer" style="background: var(--bg)"></div>
+      <div
+        id="bg-grid"
+        class="layer"
+        style="
+          background-image: radial-gradient(circle, #1A1514 1.4px, transparent 1.4px);
+          background-size: 34px 34px;
+          opacity: 0.07;
+        "
+      ></div>
+      <div
+        id="bg-glow"
+        class="layer"
+        style="
+          background: radial-gradient(
+            720px 720px at 84% 88%,
+            rgba(204, 0, 0, 0.16),
+            rgba(204, 0, 0, 0) 70%
+          );
+        "
+      ></div>
+
+      <!-- ============================================================
+           MAP LAYER. Persists 0 -> 22s. Untransformed through phase 1,
+           then scaled 0.665 + pushed down into the bottom band by a
+           single fromTo at t=10. No CSS transform at rest, so the tween
+           owns the property outright (gsap_css_transform_conflict).
+           Everything inside is authored in the map's own coordinate
+           space, so all four route cycles replay identical numbers and
+           the ancestor transform handles the rest.
+           ============================================================ -->
+      <div id="map-layer" class="layer">
+        <svg
+          id="m-plan"
+          viewBox="0 0 1000 1000"
+          style="position: absolute; left: 0px; top: 470px; width: 1080px; height: 1124px"
+        >
+          <!-- store shell -->
+          <rect x="40" y="40" width="920" height="920" rx="18"
+                fill="var(--panel)" stroke="var(--shelf-line)" stroke-width="4" />
+
+          <!-- pharmacy counter, back right -->
+          <rect x="560" y="62" width="378" height="86" rx="10"
+                fill="var(--shelf)" stroke="var(--shelf-line)" stroke-width="3" />
+          <text x="749" y="115" text-anchor="middle" font-family="Outfit, sans-serif"
+                font-size="34" font-weight="600" fill="var(--muted)"
+                letter-spacing="3">PHARMACY</text>
+
+          <!-- gondolas. Blocks are the shelving; you walk the gap below each one. -->
+          <g id="m-aisles" font-family="Outfit, sans-serif" font-size="46" font-weight="800">
+            <g>
+              <rect x="80" y="200" width="680" height="58" rx="8" fill="var(--shelf)"
+                    stroke="var(--shelf-line)" stroke-width="3" />
+              <text x="110" y="240" fill="var(--muted)">11</text>
+            </g>
+            <g>
+              <rect x="80" y="320" width="680" height="58" rx="8" fill="var(--shelf)"
+                    stroke="var(--shelf-line)" stroke-width="3" />
+              <text x="110" y="360" fill="var(--muted)">9</text>
+            </g>
+            <!-- target aisle -->
+            <g id="m-aisle7">
+              <rect id="m-aisle7-block" x="80" y="440" width="680" height="58" rx="8"
+                    fill="#F0DCDC" stroke="var(--accent)" stroke-width="4" />
+              <text x="110" y="480" fill="var(--accent-deep)">7</text>
+              <!-- bay 3 tick on the face of the block -->
+              <rect id="m-bay3" x="386" y="440" width="88" height="58" rx="6"
+                    fill="var(--accent)" opacity="0.9" />
+            </g>
+            <g>
+              <rect x="80" y="560" width="680" height="58" rx="8" fill="var(--shelf)"
+                    stroke="var(--shelf-line)" stroke-width="3" />
+              <text x="110" y="600" fill="var(--muted)">5</text>
+            </g>
+            <g>
+              <rect x="80" y="680" width="680" height="58" rx="8" fill="var(--shelf)"
+                    stroke="var(--shelf-line)" stroke-width="3" />
+              <text x="110" y="720" fill="var(--muted)">3</text>
+            </g>
+            <g>
+              <rect x="80" y="800" width="680" height="58" rx="8" fill="var(--shelf)"
+                    stroke="var(--shelf-line)" stroke-width="3" />
+              <text x="110" y="840" fill="var(--muted)">1</text>
+            </g>
+          </g>
+
+          <!-- checkout, front left -->
+          <g>
+            <rect x="80" y="880" width="340" height="62" rx="10" fill="var(--shelf)"
+                  stroke="var(--shelf-line)" stroke-width="3" />
+            <text x="250" y="920" text-anchor="middle" font-family="Outfit, sans-serif"
+                  font-size="34" font-weight="600" fill="var(--muted)"
+                  letter-spacing="3">CHECKOUT</text>
+          </g>
+
+          <!-- entrance, front right -->
+          <rect x="700" y="950" width="124" height="20" fill="var(--bg)" />
+          <text x="762" y="935" text-anchor="middle" font-family="Outfit, sans-serif"
+                font-size="30" font-weight="500" fill="var(--muted)"
+                letter-spacing="2">ENTRANCE</text>
+
+          <!-- ROUTE. Out of the entrance, up the right-hand walkway, left
+               into the Aisle 7 lane, along to Bay 3.
+
+               The dash pattern and the draw-on are deliberately on different
+               elements: a path can only have one stroke-dasharray, so using it
+               for the reveal (dasharray = total length) would flatten the
+               dashes to a solid line. The mask does the reveal instead. -->
+          <defs>
+            <mask id="m-route-mask">
+              <path
+                id="m-route-geom"
+                d="M 760 900 L 860 900 L 860 529 L 520 529 L 430 529"
+                fill="none" stroke="#fff" stroke-width="30"
+                stroke-linecap="round" stroke-linejoin="round"
+              />
+            </mask>
+          </defs>
+          <path
+            id="m-route-ghost"
+            d="M 760 900 L 860 900 L 860 529 L 520 529 L 430 529"
+            fill="none" stroke="var(--accent)" stroke-opacity="0.16"
+            stroke-width="10" stroke-linecap="round" stroke-linejoin="round"
+            stroke-dasharray="26 20"
+          />
+          <path
+            id="m-route"
+            d="M 760 900 L 860 900 L 860 529 L 520 529 L 430 529"
+            fill="none" stroke="var(--accent)" stroke-width="10"
+            stroke-linecap="round" stroke-linejoin="round"
+            stroke-dasharray="26 20" mask="url(#m-route-mask)"
+          />
+
+          <!-- you are here -->
+          <g id="m-here">
+            <circle id="m-here-ring" cx="760" cy="900" r="26" fill="none"
+                    stroke="var(--accent)" stroke-width="5" />
+            <circle cx="760" cy="900" r="13" fill="var(--accent)" />
+          </g>
+          <text x="760" y="985" text-anchor="middle" font-family="Outfit, sans-serif"
+                font-size="32" font-weight="700" fill="var(--fg)"
+                letter-spacing="2">YOU ARE HERE</text>
+
+          <!-- travelling walker -->
+          <g id="m-walker">
+            <circle r="20" fill="var(--accent)" />
+            <circle r="20" fill="none" stroke="#fff" stroke-width="5" />
+          </g>
+
+          <!-- target pin -->
+          <g id="m-pin">
+            <circle id="m-pin-halo" cx="430" cy="510" r="40" fill="var(--accent)" opacity="0.18" />
+            <circle cx="430" cy="510" r="20" fill="var(--accent)"
+                    stroke="#fff" stroke-width="6" />
+          </g>
+        </svg>
+
+        <!-- map caption. Reads under the plan in both phases. -->
+        <div
+          id="m-caption"
+          class="mono"
+          style="
+            position: absolute; left: 56px; right: 56px; top: 1610px;
+            display: flex; justify-content: space-between;
+            font-size: 26px; letter-spacing: 0.1em; color: var(--muted);
+          "
+        >
+          <span>BAY 3 &nbsp;·&nbsp; SHELF 4 OF 4</span>
+          <span id="m-dist">≈ 60 FT</span>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           INTRO CHROME. Phase 1 only — fades out during the transition
+           so the shelf view has the top of the frame to itself.
+           ============================================================ -->
+      <div
+        id="intro-chrome"
+        class="clip layer"
+        data-start="0"
+        data-duration="1.9"
+        data-track-index="2"
+      >
+        <div id="intro-inner" class="layer">
+        <div class="band" style="top: 0; height: 152px">
+          <div>
+            <div class="band-title">NyQuil Severe</div>
+          </div>
+          <div style="flex: 1"></div>
+          <div class="band-sub">Cough, Cold &amp; Flu</div>
+        </div>
+
+        <!-- Each block is its own absolutely-placed zone. A shared flow stack
+             with tight line-heights overlapped as measured boxes, which the
+             layout audit reads as unreadable regardless of how it looks. -->
+        <div id="i-eyebrow" class="eyebrow"
+             style="position: absolute; left: 56px; top: 196px; line-height: 1.3">
+          Your route
+        </div>
+        <div id="i-aisle"
+             style="position: absolute; left: 56px; top: 252px;
+                    font-size: 150px; font-weight: 800; line-height: 1">
+          Aisle 7
+        </div>
+        <div id="i-sub"
+             style="position: absolute; left: 56px; top: 424px;
+                    font-size: 34px; font-weight: 400; line-height: 1.25;
+                    color: var(--muted)">
+          Straight back, then left
+        </div>
+
+        <!-- foreground accent: a structural rule that animates well -->
+        <div
+          id="i-rule"
+          style="
+            position: absolute; left: 56px; top: 1700px; width: 968px; height: 5px;
+            background: var(--accent); transform-origin: 0% 50%;
+          "
+        ></div>
+        <div
+          id="i-footnote"
+          class="mono"
+          style="
+            position: absolute; left: 56px; right: 56px; top: 1740px;
+            display: flex; justify-content: space-between;
+            font-size: 26px; letter-spacing: 0.1em; color: var(--muted);
+          "
+        >
+          <span>IN STOCK &nbsp;·&nbsp; 14 ON HAND</span>
+          <span>STORE 2841</span>
+        </div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           SHELF LAYER. Fades in during the transition, then owns the
+           top of the frame for every loop. First-person: shelves above
+           eye level show their undersides, shelves below show their
+           top surfaces.
+           ============================================================ -->
+      <div
+        id="shelf-layer"
+        class="clip layer"
+        data-start="1.6"
+        data-duration="10.8"
+        data-track-index="3"
+      >
+        <div id="shelf-inner" class="layer">
+        <div class="band" style="top: 0; height: 112px">
+          <div class="band-title" style="font-size: 40px">Aisle 7 · Bay 3</div>
+          <div style="flex: 1"></div>
+          <div class="band-meta mono">TOP SHELF</div>
+        </div>
+
+        <svg
+          id="s-bay"
+          viewBox="0 0 1080 888"
+          style="position: absolute; left: 0; top: 112px; width: 1080px; height: 888px"
+        >
+          <!-- back panel. White, like the store card on the plan. -->
+          <rect x="0" y="0" width="1080" height="888" fill="var(--panel)" />
+          <g stroke="#EFECEA" stroke-width="2">
+            <line x1="0" y1="180" x2="1080" y2="180" />
+            <line x1="0" y1="360" x2="1080" y2="360" />
+            <line x1="0" y1="540" x2="1080" y2="540" />
+            <line x1="0" y1="720" x2="1080" y2="720" />
+          </g>
+          <!-- converging side returns: the only perspective cue that matters -->
+          <path d="M 0 0 L 96 96 L 96 792 L 0 888 Z" fill="#F4F2F0" />
+          <path d="M 1080 0 L 984 96 L 984 792 L 1080 888 Z" fill="#F4F2F0" />
+
+          <!-- ---------- shelf 4 :: TOP :: target ---------- -->
+          <g id="s-l4">
+            <g id="s-facings-4" fill="var(--shelf)" stroke="var(--shelf-line)" stroke-width="3">
+              <rect x="140" y="128" width="104" height="122" rx="7" />
+              <rect x="258" y="140" width="88" height="110" rx="7" />
+              <rect x="492" y="136" width="96" height="114" rx="7" />
+              <rect x="602" y="128" width="110" height="122" rx="7" />
+              <rect x="726" y="142" width="92" height="108" rx="7" />
+              <rect x="832" y="132" width="104" height="118" rx="7" />
+            </g>
+            <!-- the target facing, treated exactly like aisle 7 on the plan -->
+            <rect id="s-target" x="360" y="118" width="118" height="132" rx="8"
+                  fill="#F0DCDC" stroke="var(--accent)" stroke-width="4" />
+            <rect id="s-target-label" x="360" y="168" width="118" height="34"
+                  fill="var(--accent)" />
+            <!-- board + underside, because this shelf is above eye level -->
+            <rect x="96" y="250" width="888" height="18" fill="#D6D0CC" />
+            <path d="M 96 268 L 984 268 L 950 292 L 130 292 Z" fill="#C4BDB8" />
+          </g>
+
+          <!-- ---------- shelf 3 ---------- -->
+          <g id="s-l3">
+            <g fill="var(--shelf)" stroke="var(--shelf-line)" stroke-width="3">
+              <rect x="150" y="316" width="96" height="114" rx="7" />
+              <rect x="260" y="326" width="104" height="104" rx="7" />
+              <rect x="378" y="310" width="92" height="120" rx="7" />
+              <rect x="484" y="322" width="108" height="108" rx="7" />
+              <rect x="606" y="314" width="96" height="116" rx="7" />
+              <rect x="716" y="328" width="110" height="102" rx="7" />
+              <rect x="840" y="318" width="96" height="112" rx="7" />
+            </g>
+            <rect x="96" y="430" width="888" height="18" fill="#D6D0CC" />
+            <path d="M 96 448 L 984 448 L 956 466 L 124 466 Z" fill="#C4BDB8" />
+          </g>
+
+          <!-- ---------- shelf 2 :: below eye level, top surface shows ---------- -->
+          <g id="s-l2">
+            <path d="M 124 496 L 956 496 L 984 514 L 96 514 Z" fill="#EFECEA" />
+            <g fill="var(--shelf)" stroke="var(--shelf-line)" stroke-width="3">
+              <rect x="150" y="510" width="104" height="100" rx="7" />
+              <rect x="268" y="500" width="92" height="110" rx="7" />
+              <rect x="374" y="512" width="110" height="98" rx="7" />
+              <rect x="498" y="502" width="96" height="108" rx="7" />
+              <rect x="608" y="510" width="104" height="100" rx="7" />
+              <rect x="726" y="504" width="92" height="106" rx="7" />
+              <rect x="832" y="508" width="106" height="102" rx="7" />
+            </g>
+            <rect x="96" y="610" width="888" height="18" fill="#D6D0CC" />
+          </g>
+
+          <!-- ---------- shelf 1 :: BOTTOM ---------- -->
+          <g id="s-l1">
+            <path d="M 124 676 L 956 676 L 984 694 L 96 694 Z" fill="#EFECEA" />
+            <g fill="var(--shelf)" stroke="var(--shelf-line)" stroke-width="3">
+              <rect x="146" y="690" width="112" height="100" rx="7" />
+              <rect x="272" y="698" width="96" height="92" rx="7" />
+              <rect x="382" y="688" width="104" height="102" rx="7" />
+              <rect x="500" y="696" width="92" height="94" rx="7" />
+              <rect x="606" y="690" width="110" height="100" rx="7" />
+              <rect x="730" y="700" width="96" height="90" rx="7" />
+              <rect x="840" y="692" width="98" height="98" rx="7" />
+            </g>
+            <rect x="96" y="790" width="888" height="18" fill="#D6D0CC" />
+          </g>
+
+          <!-- floor -->
+          <rect x="0" y="808" width="1080" height="80" fill="#EFECEA" />
+
+          <!-- price rails: white label chips on the rail, like the real thing -->
+          <g id="s-rails">
+            <rect x="150" y="252" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="198" y="274" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">8.49</text>
+            <rect x="374" y="252" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="422" y="274" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">12.99</text>
+            <rect x="606" y="252" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="654" y="274" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">6.29</text>
+            <rect x="150" y="432" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="198" y="454" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">4.99</text>
+            <rect x="484" y="432" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="532" y="454" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">9.49</text>
+            <rect x="150" y="612" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="198" y="634" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">7.99</text>
+            <rect x="498" y="612" width="96" height="30" rx="4" fill="#FBFAF9" stroke="#C9C2BE" stroke-width="2" />
+            <text x="546" y="634" text-anchor="middle" font-size="20" font-weight="500" fill="#1A1514" font-family="JetBrains Mono, monospace">3.49</text>
+          </g>
+
+          <!-- shelf-level ladder, right edge: which of four shelves -->
+          <g id="s-ladder">
+            <rect id="s-rung-4" x="1006" y="128" width="18" height="122" rx="4" fill="var(--accent)" />
+            <rect x="1006" y="316" width="18" height="114" rx="4" fill="#CFC9C6" />
+            <rect x="1006" y="502" width="18" height="108" rx="4" fill="#CFC9C6" />
+            <rect x="1006" y="690" width="18" height="100" rx="4" fill="#CFC9C6" />
+          </g>
+
+          <!-- the highlight that sweeps up the bay -->
+          <rect id="s-sweep" x="96" y="690" width="888" height="100"
+                fill="var(--accent)" opacity="0" />
+
+          <!-- target ring -->
+          <rect id="s-ring" x="346" y="104" width="146" height="160" rx="12"
+                fill="none" stroke="var(--accent)" stroke-width="8" />
+
+          <!-- reach-up chevrons -->
+          <g id="s-chevrons" stroke="var(--accent)" stroke-width="10" fill="none"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path id="s-chev-1" d="M 540 360 L 580 320 L 620 360" />
+            <path id="s-chev-2" d="M 540 418 L 580 378 L 620 418" />
+          </g>
+        </svg>
+
+        <!-- callout -->
+        <div
+          id="s-callout"
+          style="
+            position: absolute; left: 712px; top: 292px;
+            background: var(--accent); color: #fff;
+            padding: 20px 32px; border-radius: 14px;
+          "
+        >
+          <div style="font-size: 46px; font-weight: 800; line-height: 1">Top shelf</div>
+          <div class="mono" style="font-size: 22px; opacity: 0.85; margin-top: 6px">
+            REACH UP · BAY 3
+          </div>
+        </div>
+
+        <!-- Labels the map band below. Lives here, not in #map-layer, so the
+             0.62 shrink cannot touch its type size. -->
+        <div
+          id="band-label"
+          style="position: absolute; left: 56px; right: 56px; top: 1072px;
+                 display: flex; justify-content: space-between; align-items: baseline"
+        >
+          <span class="eyebrow">You are here &rarr; Aisle 7</span>
+          <span class="mono" style="font-size: 26px; letter-spacing: 0.1em; color: var(--muted)">
+            &asymp; 60 FT
+          </span>
+        </div>
+
+        <div
+          id="s-name"
+          style="
+            position: absolute; left: 56px; top: 924px;
+            font-size: 44px; font-weight: 700;
+          "
+        >
+          NyQuil Severe
+          <span style="font-weight: 400; color: var(--muted)">· 12 oz</span>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ====================================================================
+         One paused, seek-safe timeline. 12.4s total:
+
+           0.0 - 1.0   full frame. A one-second establishing beat: the plan
+                       lands, the headline sets, the route snaps in.
+           1.0 - 2.4   the break-out. The map shrinks into the bottom band,
+                       the intro chrome clears, the shelf view fades in above.
+           2.4 - 12.4  the split loop, 10.0s: two route cycles in the band
+                       (2.4, 7.4) under one shelf cycle. Ends where it began.
+
+         SEAM CONTRACT. The render splits into two MP4s at t=2.4 (frame 72) and
+         the second one loops, so state(12.4) must equal state(2.4):
+
+           - Route and walker: cycle 2 (7.4-12.4) replays cycle 1's numbers
+             exactly, and the break-out retracts the route so cycle 1 starts
+             from the same rest state cycle 2 ends on.
+           - Shelf: at REST from t=0, untouched until 2.4, and the shelf cycle
+             hands everything back at REST by 12.0 -- before the loop's last
+             rendered frame (371, t=12.3667).
+           - Ambient loops: 2s period. 2 divides 10, so the phase at 12.4
+             equals the phase at 2.4 whatever the offset. They are authored
+             13s long and simply cut off at data-duration.
+
+         Nothing may tween across t=2.4 or t=12.4 except with a period
+         dividing 10.
+         ==================================================================== */
+
+      const tl = gsap.timeline({ paused: true });
+
+      const BREAK = 1.0;   // the full-frame beat ends here
+      const SPLIT = 2.4;   // split settled; the loop file starts on this frame
+      const END = 12.4;
+
+      const ROUTE = document.getElementById("m-route-geom");
+      // Geometry read, not a clock: deterministic across seeks.
+      const ROUTE_LEN = ROUTE.getTotalLength();
+      ROUTE.setAttribute("stroke-dasharray", ROUTE_LEN);
+
+      /* The rest state of everything that cycles. Applied once at t=0, and
+         handed back at the end of each cycle. Zero-duration boundary sets on
+         non-clip children are the sanctioned way to do this. */
+      const REST = [
+        ["#m-walker", { autoAlpha: 0, x: 760, y: 900 }],
+        ["#m-route-geom", { strokeDashoffset: ROUTE_LEN }],
+        ["#m-pin-halo", { scale: 1, opacity: 0.18 }],
+        ["#m-bay3", { scale: 1 }],
+        ["#s-sweep", { autoAlpha: 0, y: 0 }],
+        ["#s-ring", { autoAlpha: 0, scale: 1 }],
+        ["#s-callout", { autoAlpha: 0, x: 40 }],
+        ["#s-chev-1", { autoAlpha: 0, y: 24 }],
+        ["#s-chev-2", { autoAlpha: 0, y: 24 }],
+        ["#s-target", { scale: 1 }],
+      ];
+      const rest = (at) => REST.forEach(([sel, v]) => tl.set(sel, v, at));
+      rest(0);
+
+      /* ---------------- ambient: 2s period, cut off at data-duration ---------------- */
+      tl.to("#bg-glow", { opacity: 0.55, duration: 1, yoyo: true, repeat: 12, ease: "sine.inOut" }, 0);
+      tl.to("#m-here-ring", { scale: 1.5, opacity: 0, duration: 1, yoyo: true, repeat: 12, ease: "sine.out" }, 0);
+
+      /* ---------------- the route cycle, C = 5.0s ----------------
+         Authored in the map's own coordinate space, so both loop cycles are
+         numerically identical and the ancestor transform just scales them. */
+      const P = [
+        [760, 900],
+        [860, 900],
+        [860, 529],
+        [520, 529],
+        [430, 529],
+      ];
+      // Segment durations proportional to length, summing to 2.6s.
+      const SEG = [0.29, 1.07, 0.98, 0.26];
+      const EASE = ["power1.in", "none", "none", "power1.out"];
+
+      function routeCycle(at) {
+        // 0.0-0.6 draw the route
+        tl.fromTo(
+          "#m-route-geom",
+          { strokeDashoffset: ROUTE_LEN },
+          { strokeDashoffset: 0, duration: 0.6, ease: "power2.inOut", immediateRender: false },
+          at,
+        );
+
+        // 0.5-3.2 the walker travels it, one tween per leg so each turn
+        // gets its own ease and every leg stays inspectable on the timeline
+        tl.fromTo(
+          "#m-walker",
+          { autoAlpha: 0, x: P[0][0], y: P[0][1] },
+          { autoAlpha: 1, duration: 0.18, immediateRender: false },
+          at + 0.5,
+        );
+        let t = at + 0.6;
+        for (let i = 0; i < SEG.length; i++) {
+          tl.to("#m-walker", { x: P[i + 1][0], y: P[i + 1][1], duration: SEG[i], ease: EASE[i] }, t);
+          t += SEG[i];
+        }
+
+        // 3.2-4.1 arrival
+        tl.fromTo(
+          "#m-pin-halo",
+          { scale: 1, opacity: 0.5 },
+          { scale: 2.1, opacity: 0, duration: 0.9, ease: "power2.out", immediateRender: false },
+          at + 3.2,
+        );
+        tl.to("#m-bay3", { scale: 1.16, duration: 0.22, yoyo: true, repeat: 1, ease: "power2.inOut" }, at + 3.25);
+
+        // 4.0-4.8 ease back to the undrawn start state
+        tl.to("#m-walker", { autoAlpha: 0, duration: 0.3, ease: "power1.in" }, at + 4.0);
+        tl.to("#m-route-geom", { strokeDashoffset: ROUTE_LEN, duration: 0.7, ease: "power2.in" }, at + 4.1);
+        rest(at + 4.9);
+      }
+
+      /* ---------------- phase 1: the one-second establishing beat ----------------
+         Too short to walk the route, so this beat states it instead: the plan
+         lands, the aisle number sets, the route snaps in and the bay ticks.
+         The walking happens in the band, on loop. Everything settles by 0.95
+         so the break-out starts from a composed frame. */
+      tl.fromTo("#intro-inner .band", { yPercent: -100 }, { yPercent: 0, duration: 0.35, ease: "power3.out" }, 0);
+      tl.fromTo("#m-plan", { autoAlpha: 0, scale: 0.965 }, { autoAlpha: 1, scale: 1, duration: 0.5, ease: "power2.out" }, 0.05);
+      tl.fromTo("#i-eyebrow", { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.28, ease: "power2.out" }, 0.12);
+      tl.fromTo("#i-aisle", { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: 0.42, ease: "back.out(1.5)" }, 0.18);
+      tl.fromTo("#i-sub", { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "power2.out" }, 0.3);
+      tl.fromTo("#i-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power3.inOut" }, 0.28);
+      tl.fromTo("#i-footnote", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, 0.45);
+      tl.fromTo(
+        "#m-route-geom",
+        { strokeDashoffset: ROUTE_LEN },
+        { strokeDashoffset: 0, duration: 0.55, ease: "power2.out", immediateRender: false },
+        0.3,
+      );
+      tl.to("#m-bay3", { scale: 1.16, duration: 0.18, yoyo: true, repeat: 1, ease: "power2.inOut" }, 0.8);
+
+      /* ---------------- the break-out, 1.0 - 2.4 ----------------
+         The map keeps its own coordinate space; only the ancestor moves.
+         No CSS transform sits on #map-layer at rest, so this fromTo owns the
+         property outright (gsap_css_transform_conflict).
+         scale 0.62 about the layer centre + y 465 lands the plan's 470-1594
+         box on 1121-1818: the bottom band. */
+      tl.fromTo(
+        "#map-layer",
+        { scale: 1, y: 0, transformOrigin: "50% 50%" },
+        { scale: 0.62, y: 465, duration: 1.4, ease: "power2.inOut", transformOrigin: "50% 50%" },
+        BREAK,
+      );
+      tl.to("#m-caption", { autoAlpha: 0, duration: 0.35 }, BREAK);
+      tl.set("#m-caption", { autoAlpha: 0 }, 1.9);
+      tl.to("#intro-inner", { autoAlpha: 0, duration: 0.7, ease: "power2.inOut" }, BREAK);
+      // Hard kill on the clip boundary: a non-linear seek can land past the
+      // fade and inherit stale visibility otherwise.
+      tl.set("#intro-inner", { autoAlpha: 0 }, 1.9);
+      // Retract the route during the move, so the loop's first cycle draws
+      // from exactly the rest state its last cycle ends on.
+      tl.to("#m-route-geom", { strokeDashoffset: ROUTE_LEN, duration: 0.6, ease: "power2.in" }, 1.05);
+      tl.fromTo("#shelf-inner", { autoAlpha: 0, y: -30 }, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power2.out" }, 1.6);
+
+      /* ---------------- the split loop, 2.4 - 12.4 ---------------- */
+      routeCycle(SPLIT);
+      routeCycle(SPLIT + 5);
+
+      function shelfCycle(at) {
+        // 1.0-2.3 highlight sweeps bottom shelf -> top shelf
+        tl.fromTo("#s-sweep", { autoAlpha: 0, y: 0 }, { autoAlpha: 0.2, duration: 0.22, immediateRender: false }, at + 1.0);
+        tl.to("#s-sweep", { y: -562, duration: 0.95, ease: "power2.inOut" }, at + 1.1);
+        tl.to("#s-sweep", { autoAlpha: 0, duration: 0.28 }, at + 2.0);
+
+        // 2.3-3.4 the ring lands, then the callout slides in
+        tl.fromTo("#s-ring", { autoAlpha: 0, scale: 1.55 }, { autoAlpha: 1, scale: 1, duration: 0.6, ease: "back.out(2)", immediateRender: false }, at + 2.3);
+        tl.fromTo("#s-callout", { autoAlpha: 0, x: 40 }, { autoAlpha: 1, x: 0, duration: 0.5, ease: "power3.out", immediateRender: false }, at + 2.7);
+
+        // 3.4-7.0 breathe. 0.9s each way x 4 halves = 3.6s, back where it started.
+        tl.to("#s-target", { scale: 1.05, duration: 0.9, yoyo: true, repeat: 3, ease: "sine.inOut" }, at + 3.4);
+        tl.to("#s-ring", { scale: 1.04, duration: 0.9, yoyo: true, repeat: 3, ease: "sine.inOut" }, at + 3.4);
+
+        // 7.0-9.0 two reach-up pulses
+        for (let k = 0; k < 2; k++) {
+          const t0 = at + 7.0 + k;
+          tl.fromTo("#s-chev-1", { autoAlpha: 0, y: 24 }, { autoAlpha: 0.95, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, t0);
+          tl.to("#s-chev-1", { autoAlpha: 0, y: -22, duration: 0.4, ease: "power2.in" }, t0 + 0.4);
+          tl.fromTo("#s-chev-2", { autoAlpha: 0, y: 24 }, { autoAlpha: 0.95, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, t0 + 0.14);
+          tl.to("#s-chev-2", { autoAlpha: 0, y: -22, duration: 0.4, ease: "power2.in" }, t0 + 0.54);
+        }
+
+        // 9.0-9.5 clear down, then hand everything back at REST well before
+        // the loop's last rendered frame (371, t=12.3667)
+        tl.to(["#s-ring", "#s-callout"], { autoAlpha: 0, duration: 0.5, ease: "power2.in" }, at + 9.0);
+        rest(at + 9.6);
+      }
+
+      shelfCycle(SPLIT);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

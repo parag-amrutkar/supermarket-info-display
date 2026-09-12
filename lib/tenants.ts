@@ -26,6 +26,20 @@ export type TenantBrand = {
   accent?: string;
 };
 
+/**
+ * A full-screen advertisement loop.
+ *
+ * A tenant that carries one shows it as its signed-in screen instead of the
+ * content dashboard: on this hardware the ad IS the display. See
+ * `components/kiosk/ad-loop-screen.tsx`.
+ */
+export type TenantAd = {
+  /** Path under `public/`. Must be 9:16, or the panel crops it. */
+  src: string;
+  /** Advertiser, used for the sound control's accessible name. */
+  advertiser: string;
+};
+
 /** Which wordmark treatment to render. See `components/kiosk/tenant-wordmark.tsx`. */
 export type TenantWordmark = "cvs" | "sunrise";
 
@@ -46,6 +60,9 @@ export type Tenant = {
    */
   pin: string;
   brand: TenantBrand;
+  /** Ad loop to run as this machine's signed-in screen. Omit for a tenant that
+   *  should get the content dashboard instead. */
+  ad?: TenantAd;
 };
 
 export const TENANTS: Tenant[] = [
@@ -80,6 +97,10 @@ export const TENANTS: Tenant[] = [
       foreground: "oklch(0.9367 0.0367 86.1738)", // cream #F5E9CF
       muted: "oklch(0.3604 0.0790 154.8185)",
       accent: "oklch(0.5554 0.1835 28.5138)", // awning red #C8372D
+    },
+    ad: {
+      src: "/whiteclaw_animated_outdoor_15s.mp4",
+      advertiser: "White Claw",
     },
   },
 ];
