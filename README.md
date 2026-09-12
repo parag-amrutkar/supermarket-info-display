@@ -1,4 +1,16 @@
-# Supermarket Info Display
+<div align="center">
+
+<img src="docs/beacon-box-mark.svg" alt="" width="112" height="112" />
+
+# Beacon Box
+
+**Ask. Find. Pick.**
+
+An AI-powered, voice-enabled in-store shopping assistant for grocery and retail.
+It runs on a 9:16 portrait kiosk panel: a shopper walks up, asks where something
+is, and gets the aisle, rack, and shelf back — no app, no employee.
+
+</div>
 
 ## Voice transcription
 
