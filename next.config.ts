@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
     // Tailscale CGNAT range (100.64.0.0/10). This is the one actually needed:
     // the dev log showed `/_next/hmr` blocked from 100.87.169.2.
     "100.*.*.*",
+    // Tailscale MagicDNS names. `tailscale serve` fronts the dev server with a
+    // real cert, and that https origin is what makes the microphone work at
+    // all — getUserMedia is hidden outside a secure context, so the panel
+    // cannot be driven by voice over a plain http://100.x.x.x URL.
+    "**.ts.net",
     // Private LAN ranges, for loading the kiosk on panel hardware or a phone.
     "192.168.*.*",
     "10.*.*.*",

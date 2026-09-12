@@ -96,6 +96,15 @@ export function useVoiceInput() {
     setCanRetry(false);
     setElapsedSeconds(0);
     setError(null);
+    // A browser hides `mediaDevices` entirely outside a secure context, so an
+    // http:// LAN or Tailscale URL fails here looking exactly like an old
+    // browser. Name the real cause: the panel is opened over the network far
+    // more often than it is opened on localhost.
+    if (!window.isSecureContext) {
+      updateStatus("error");
+      setError("The microphone needs a secure (https) connection to this display. Type your question below.");
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       updateStatus("error");
       setError("Audio recording is not supported in this browser. Type your question below.");
