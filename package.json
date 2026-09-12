@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:shopping-agent": "node --test scripts/shopping-agent-regression.mjs",
     "inventory:validate": "node scripts/import-cvs-inventory.mjs",
     "inventory:import": "node --env-file-if-exists=.env.local scripts/import-cvs-inventory.mjs --apply"
   },

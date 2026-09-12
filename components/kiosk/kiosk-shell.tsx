@@ -15,6 +15,7 @@ import {
   readDemoSession,
   writeDemoSession,
 } from "@/lib/demo-auth";
+import { clearShoppingChat } from "@/lib/shopping-agent";
 import {
   brandStyle,
   getTenant,
@@ -106,6 +107,7 @@ export function KioskShell({ tenants }: { tenants: Tenant[] }) {
   };
 
   const handleSignOut = () => {
+    if (flow.step === "signedIn") clearShoppingChat(flow.tenant.id, flow.session.signedInAt);
     clearDemoSession();
     setFlow({ step: "welcome" });
   };
