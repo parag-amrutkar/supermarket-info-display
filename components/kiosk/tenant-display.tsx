@@ -8,13 +8,14 @@ import { AwningStripe, TenantWordmark } from "@/components/kiosk/tenant-wordmark
 import type { Tenant } from "@/lib/tenants";
 
 /**
- * The store's own home screen — tenant chrome at the top, push to talk at the
- * bottom, and deliberately nothing in between.
+ * The store's own home screen — tenant chrome at the top, the store's mark at
+ * hero scale in the middle, push to talk at the bottom.
  *
- * The empty middle is the design, not an unfinished state: a shopper walking up
- * has exactly one thing to do, and the answer takes over the panel the moment
- * they have spoken (see `push-to-talk.tsx`). Content slots, promotions and the
- * product shortcut all lived here and were competing with the microphone.
+ * Three elements and nothing else: content slots, promotions and the product
+ * shortcut all lived here and were competing with the microphone. The hero mark
+ * is identity, not content — from across an aisle it reads as *this store's*
+ * screen before any of the type is legible, and it never asks to be touched, so
+ * a shopper walking up still has exactly one thing to do.
  *
  * `relative`, because the transcript flash positions against this element.
  */
@@ -93,7 +94,18 @@ export function TenantDisplay({
 
       {tenant.brand.accent ? <AwningStripe className="h-[2cqw] shrink-0" /> : null}
 
-      <div className="min-h-0 flex-1" />
+      {/* Hero mark. Sized in `cqw` like everything else, and deliberately below
+          the largest the wordmarks can go before the widest of them (CVS, which
+          runs about 4.8em end to end) reaches the panel edge. `decorative`
+          because the header above already announces the tenant's name — a
+          screen reader should not hear the store twice. */}
+      <div className="grid min-h-0 flex-1 place-items-center px-[6cqw]">
+        <TenantWordmark
+          tenant={tenant}
+          decorative
+          className="text-[13cqw] text-brand"
+        />
+      </div>
 
       <PushToTalk />
     </div>
