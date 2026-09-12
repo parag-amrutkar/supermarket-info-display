@@ -27,6 +27,9 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
@@ -56,6 +59,16 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
+  --animate-shake: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Wrong-PIN feedback on the kiosk keypad. tw-animate-css ships no shake. */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-0.6rem); }
+  40% { transform: translateX(0.5rem); }
+  60% { transform: translateX(-0.3rem); }
+  80% { transform: translateX(0.15rem); }
 }
 
 :root {
@@ -70,7 +83,10 @@
   --secondary: oklch(0.9595 0.0200 286.0164);
   --secondary-foreground: oklch(0.1649 0.0352 281.8285);
   --muted: oklch(0.9595 0.0200 286.0164);
-  --muted-foreground: oklch(0.1649 0.0352 281.8285);
+  /* The tweakcn export shipped this identical to --foreground, so
+     `text-muted-foreground` de-emphasised nothing. Now a real value:
+     4.62:1 on --background, which clears WCAG AA for body text. */
+  --muted-foreground: oklch(0.5500 0.0300 281.8285);
   --accent: oklch(0.8903 0.1739 171.2690);
   --accent-foreground: oklch(0.1649 0.0352 281.8285);
   --destructive: oklch(0.6535 0.2348 34.0370);
@@ -91,6 +107,15 @@
   --sidebar-accent-foreground: oklch(0.1649 0.0352 281.8285);
   --sidebar-border: oklch(0.9205 0.0086 225.0878);
   --sidebar-ring: oklch(0.6726 0.2904 341.4084);
+
+  /* Tenant brand tokens. Overridden per tenant at runtime via an inline style
+     on a wrapper element (see components/kiosk/). This works ONLY because the
+     @theme mapping above is `inline` — `bg-brand` compiles to `var(--brand)`,
+     a live reference rather than a baked literal. Drop `inline` and per-tenant
+     theming silently stops working. Defaults below are Beacon Box's own. */
+  --brand: oklch(0.6726 0.2904 341.4084);
+  --brand-foreground: oklch(1.0000 0 0);
+  --brand-muted: oklch(0.5488 0.2944 299.0954);
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: var(--font-fira-code), ui-monospace, monospace;
@@ -144,6 +169,15 @@
   --sidebar-accent-foreground: oklch(0.1649 0.0352 281.8285);
   --sidebar-border: oklch(0.3279 0.0832 280.7890);
   --sidebar-ring: oklch(0.6726 0.2904 341.4084);
+
+  /* Tenant brand tokens. Overridden per tenant at runtime via an inline style
+     on a wrapper element (see components/kiosk/). This works ONLY because the
+     @theme mapping above is `inline` — `bg-brand` compiles to `var(--brand)`,
+     a live reference rather than a baked literal. Drop `inline` and per-tenant
+     theming silently stops working. Defaults below are Beacon Box's own. */
+  --brand: oklch(0.6726 0.2904 341.4084);
+  --brand-foreground: oklch(1.0000 0 0);
+  --brand-muted: oklch(0.5488 0.2944 299.0954);
 }
 
 @layer base {

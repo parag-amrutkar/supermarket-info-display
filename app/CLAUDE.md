@@ -2,7 +2,23 @@
 
 Next.js 16 App Router. Read the relevant guide under `node_modules/next/dist/docs/01-app/` before writing routing code — this Next version has breaking changes from older conventions.
 
-Everything here is currently a server component; there is no `"use client"` in this directory yet. Keep it that way where possible and push interactivity into `components/`.
+Everything here is a server component; there is no `"use client"` in this directory. **Keep it that way** — the kiosk's entire client boundary is `components/kiosk/kiosk-shell.tsx`, and `page.tsx` exists only to hand it the tenant list.
+
+## The kiosk shell chrome
+
+`page.tsx` renders `<KioskShell tenants={TENANTS} />` and nothing else. The flow (welcome → picker → PIN → display) is state inside that component, not routes — see the root `CLAUDE.md` for why.
+
+`layout.tsx` carries the three things that make this behave like a panel rather than a web page:
+
+- **Light mode, deliberately.** Nothing sets `.dark`, so the dark palette in `globals.css` is inert. Don't add it back without being asked — the kiosk is designed light, and `colorScheme: "light"` in the `viewport` export matches. Light mode used to have a real bug (`--muted-foreground` was a copy of `--foreground`, so `text-muted-foreground` de-emphasised nothing); that token is fixed in `:root` and the value is contrast-checked, so leave it alone.
+- **A `viewport` export.** `userScalable: false` and `maximumScale: 1` are the load-bearing fields — a pinch-zoomed kiosk stays zoomed forever with no way to undo it. `themeColor` is `#f8f9fa`, the hex `--background` compiles to; if you change the background, change this or the browser toolbar tint drifts.
+- **Kiosk body classes.** `h-dvh overflow-hidden overscroll-none touch-manipulation select-none` plus `[-webkit-tap-highlight-color:transparent]`. `touch-manipulation` is the one that matters most for feel: it removes the 300 ms double-tap-zoom delay. `dvh`, not `vh`, so mobile browser chrome cannot clip the panel.
+
+`viewport` and `generateViewport` cannot both be exported from one segment, and both are server-components-only.
+
+## proxy.ts affects every route here
+
+Root `proxy.ts` (Next 16's middleware) matches nearly everything under `app/`. It refreshes Supabase auth claims — but only when Supabase is configured; it returns early otherwise. If a route starts 500ing with "Missing Supabase environment variables", that guard is what went missing.
 
 ## Route handlers
 

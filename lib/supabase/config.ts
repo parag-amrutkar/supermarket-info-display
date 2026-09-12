@@ -14,3 +14,14 @@ export function getSupabaseConfig() {
     publishableKey: SUPABASE_PUBLISHABLE_KEY,
   };
 }
+
+/**
+ * Whether Supabase credentials are present.
+ *
+ * Additive helper so callers can skip Supabase work instead of throwing. The
+ * proxy runs on nearly every request, so without this an unset env turns the
+ * whole app into a 500 — including routes that use no auth at all.
+ */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+}

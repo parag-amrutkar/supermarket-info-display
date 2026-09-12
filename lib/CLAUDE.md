@@ -2,6 +2,30 @@
 
 Shared non-UI code. `utils.ts` is a shadcn-generated re-export shim (`export { cn } from "cn"`) — leave it alone and import `cn` from the bare `cn` package, as the components do.
 
+## tenants.ts — who owns the machine
+
+The demo tenants (a CVS-branded chain screen and an invented NYC bodega) plus `PIN_LENGTH` and `brandStyle()`.
+
+Brand colours are plain `oklch()` strings, not Tailwind classes, because `brandStyle()` assigns them to `--brand*` custom properties in an inline style. That re-skins a whole subtree with no per-tenant CSS — but only because `app/globals.css` uses `@theme **inline**`, which makes `bg-brand` compile to a live `var(--brand)`. See `components/CLAUDE.md`.
+
+One asymmetry worth knowing: `oklch()` written in `globals.css` is downleveled to hex at build time, but inline styles bypass that and ship as literal `oklch()`. Fine on any 2023+ browser; an ancient Android WebView panel would drop tenant colours while keeping the house theme.
+
+The CVS entry is an **unlicensed placeholder** for an internal demo — the wordmark is drawn as text and inline SVG, and no logo asset is fetched or committed. Keep it that way until real assets arrive under agreement.
+
+## demo-auth.ts — not authentication
+
+Accepts **any** PIN of the right length and keeps a fake session in `sessionStorage`. No server check, no token, no database, no revocation. The file opens with a warning block; keep it, and keep the module name honest.
+
+`verifyPin` is async with a deliberate ~320 ms delay so the keypad has a "checking" state — an instant transition reads as a glitch, not a sign-in. The `wrong-pin` branch is currently unreachable but is the shape a real check will return, and the keypad already renders it.
+
+Making it real means moving credentials out of client-reachable code, verifying in a route handler or server action, issuing an httpOnly cookie, and gating on it server-side. That is also the point at which the kiosk flow could become real routes.
+
+## supabase/ — optional, and must stay optional
+
+`client.ts`, `server.ts`, `proxy.ts` and `config.ts` wrap `@supabase/ssr`. Root `proxy.ts` calls `updateSession` on nearly every request.
+
+`getSupabaseConfig()` **throws** when the env vars are unset, which took every route down with a 500 — including the kiosk, which uses no auth. `config.ts` therefore also exports `isSupabaseConfigured()`, and root `proxy.ts` returns early on it. Don't remove that guard: a clone with no Supabase project has to still run the app.
+
 ## ai.ts — the model registry
 
 The single place models are resolved. An AI SDK v7 `createProviderRegistry` addresses every model as `"<provider>:<model>"`:
