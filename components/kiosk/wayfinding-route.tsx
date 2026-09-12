@@ -22,14 +22,23 @@ type Directions = {
  */
 export function WayfindingRoute({
   backHref,
+  productSlug,
   productName,
   directions,
 }: {
   backHref: string;
+  productSlug: string;
   productName: string;
   directions: Directions;
 }) {
   const router = useRouter();
 
-  return <WayfindingScreen onBack={() => router.push(backHref)} productName={productName} directions={directions} />;
+  return (
+    <WayfindingScreen
+      onBack={() => router.push(backHref)}
+      productSlug={productSlug}
+      productName={productName}
+      directions={directions}
+    />
+  );
 }
